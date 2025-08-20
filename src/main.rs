@@ -6,6 +6,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, WindowCanvas};
 use sdl2::image::LoadTexture;
+use sdl2::mouse;
 use std::time::Duration;
 
 pub fn main() {
@@ -14,7 +15,7 @@ pub fn main() {
     let timer_subsystem = sdl_context.timer().unwrap();
     let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG).unwrap();
 
-    let window = video_subsystem.window("rust-sdl2 demo", 200,100)
+    let window = video_subsystem.window("countdown", 200,100)
         .position_centered()
         .build()
         .unwrap();
@@ -32,9 +33,31 @@ pub fn main() {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} |
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                Event::Quit {..} => {
                     break 'running
+                },
+                Event::KeyDown { keycode, .. } => {
+                    match keycode {
+                        Some(Keycode::Escape) => {
+                            break 'running
+                        }
+                        _ => {
+                            let keycode = keycode.unwrap_or(Keycode::Space);
+                            let keyname = keycode.name();
+                            println!("{keyname}");
+                        }
+                    }
+                },
+                Event::MouseButtonDown { mouse_btn, x, y, .. } => {
+                    match mouse_btn {
+                        mouse::MouseButton::Left => {
+                            println!("left {x} {y}");
+                        },
+                        mouse::MouseButton::Right => {
+                            println!("right {x} {y}");
+                        },
+                        _ => {}
+                    }
                 },
                 _ => {}
             }
