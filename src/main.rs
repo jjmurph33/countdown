@@ -8,6 +8,7 @@ use sdl2::mouse;
 use sdl2::pixels::Color;
 use sdl2::rect::{Point, Rect};
 use sdl2::render::{Texture, WindowCanvas};
+use std::collections::HashMap;
 use std::env;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -63,8 +64,11 @@ pub fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
 
-    let char_texture = texture_creator.load_texture("res/chars.png").unwrap();
-    let button_texture = texture_creator.load_texture("res/buttons.png").unwrap();
+    let mut textures = HashMap::new();
+    let texture = texture_creator.load_texture("res/chars.png").unwrap();
+    textures.insert("chars", texture);
+    let texure = texture_creator.load_texture("res/buttons.png").unwrap();
+    textures.insert("buttons", texure);
 
     *BUTTONS.lock().unwrap() = init_buttons();
 
@@ -110,25 +114,9 @@ pub fn main() {
             update(elapsed_time);
         }
 
-        // clear the screen
-        canvas.set_draw_color(Color::RGB(200, 200, 255));
-        canvas.clear();
+        draw(&mut canvas, &textures);
 
-        // draw the timer
-        let offset: i32 = 8;
-        let mut x: i32 = offset;
-        let y: i32 = offset;
-        let timer_str = timer_to_string(*TIMER.lock().unwrap());
-        for c in timer_str.chars() {
-            draw_char(&mut canvas, &char_texture, c, x, y);
-            x += 32;
-        }
-
-        // draw the buttons
-        draw_buttons(&mut canvas, &button_texture);
-
-        canvas.present();
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        std::thread::sleep(Duration::from_millis(16));
     }
 }
 
@@ -139,6 +127,28 @@ fn update(elapsed_time: i32) {
         timer = 0;
     }
     *TIMER.lock().unwrap() = timer;
+}
+
+fn draw(canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>) {
+    // clear the screen
+    canvas.set_draw_color(Color::RGB(200, 200, 255));
+    canvas.clear();
+
+    // draw the timer
+    let offset: i32 = 8;
+    let mut x: i32 = offset;
+    let y: i32 = offset;
+    let timer_str = timer_to_string(*TIMER.lock().unwrap());
+    let texture = textures.get("chars").unwrap();
+    for c in timer_str.chars() {
+        draw_char(canvas, texture, c, x, y);
+        x += 32;
+    }
+
+    // draw the buttons
+    draw_buttons(canvas, &textures.get("buttons").unwrap());
+
+    canvas.present();
 }
 
 fn timer_to_string(timer: i32) -> String {
