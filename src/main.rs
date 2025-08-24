@@ -29,8 +29,8 @@ struct Button {
 
 static BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
 static PAUSED: Mutex<bool> = Mutex::new(false);
-static TIMER_MAX: Mutex<i32> = Mutex::new(500); // start value of timer
-static TIMER: Mutex<i32> = Mutex::new(500); // countdown timer in seconds
+static TIMER_MAX: Mutex<i32> = Mutex::new(500000); // start value of timer
+static TIMER: Mutex<i32> = Mutex::new(500000); // countdown timer in milliseconds
 
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -50,10 +50,9 @@ pub fn main() {
     let char_texture = texture_creator.load_texture("res/chars.png").unwrap();
     let button_texture = texture_creator.load_texture("res/buttons.png").unwrap();
 
-    let mut ticks = 0;
-    let mut elapsed_ms = 0;
-
     *BUTTONS.lock().unwrap() = init_buttons();
+
+    let mut ticks = 0;
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -88,20 +87,16 @@ pub fn main() {
 
         let last_ticks = ticks;
         ticks = timer_subsystem.ticks64();
-        let dt = ticks - last_ticks;
+        let elapsed_time = (ticks - last_ticks) as i32;
 
         let paused = *PAUSED.lock().unwrap();
         if !paused {
-            elapsed_ms += dt;
-            let mut timer_guard = TIMER.lock().unwrap();
-            if elapsed_ms >= 1000 {
-                *timer_guard -= 1;
-                elapsed_ms = 0;
+            let mut timer = *TIMER.lock().unwrap();
+            timer -= elapsed_time;
+            if timer < 0 {
+                timer = 0;
             }
-            if *timer_guard < 0 {
-                *timer_guard = 0;
-            }
-            update(dt);
+            *TIMER.lock().unwrap() = timer;
         }
 
         // clear the screen
@@ -175,8 +170,9 @@ fn check_buttons(x: i32, y: i32) {
 }
 
 fn timer_to_string(timer: i32) -> String {
-    let mins = timer / 60;
-    let secs = timer % 60;
+    let secs = timer / 1000;
+    let mins = secs / 60;
+    let secs = secs % 60;
 
     let mut mins = mins.to_string();
     if mins.len() == 1 {
