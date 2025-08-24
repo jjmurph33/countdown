@@ -8,6 +8,7 @@ use sdl2::mouse;
 use sdl2::pixels::Color;
 use sdl2::rect::{Point, Rect};
 use sdl2::render::{Texture, WindowCanvas};
+use sdl2::video::Window;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Mutex;
@@ -40,9 +41,8 @@ enum ButtonType {
 
 struct Button {
     name: ButtonType,
-    rect: Rect,                         // position on the screen
-    texture_rect: Rect,                 // position in the texture
-    click: Box<dyn Fn() + Send + Sync>, // function to call when clicked
+    rect: Rect,         // position on the screen
+    texture_rect: Rect, // position in the texture
 }
 
 static TIMER: Mutex<Timer> = Mutex::new(Timer {
@@ -52,6 +52,7 @@ static TIMER: Mutex<Timer> = Mutex::new(Timer {
 });
 
 static BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static BORDERED: Mutex<bool> = Mutex::new(false); // window borders
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
@@ -83,6 +84,7 @@ pub fn main() {
     let window = video_subsystem
         .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
         .position_centered()
+        .borderless()
         .build()
         .unwrap();
 
@@ -117,7 +119,7 @@ pub fn main() {
                 } => {
                     match mouse_btn {
                         mouse::MouseButton::Left => {
-                            check_buttons(x, y);
+                            check_buttons(x, y, canvas.window_mut());
                             //println!("left {x} {y}");
                         }
                         mouse::MouseButton::Right => {
@@ -207,31 +209,32 @@ fn init_buttons() -> Vec<Button> {
         name: ButtonType::Hide,
         rect: Rect::new(x, y, 24, 24),
         texture_rect: Rect::new(64 * 3, 0, 64, 64),
-        click: Box::new(on_hide_clicked),
     });
     x = x - 24 - offset;
     v.push(Button {
         name: ButtonType::Refresh,
         rect: Rect::new(x, y, 24, 24),
         texture_rect: Rect::new(64 * 2, 0, 64, 64),
-        click: Box::new(on_refresh_clicked),
     });
     x = x - 24 - offset;
     v.push(Button {
         name: ButtonType::Play,
         rect: Rect::new(x, y, 24, 24),
         texture_rect: Rect::new(0, 0, 64, 64),
-        click: Box::new(on_play_clicked),
     });
     v
 }
 
-fn check_buttons(x: i32, y: i32) {
+fn check_buttons(x: i32, y: i32, window: &mut Window) {
     let p = Point::new(x, y);
     let buttons = BUTTONS.lock().unwrap();
     for b in buttons.iter() {
         if b.rect.contains_point(p) {
-            (b.click)();
+            match b.name {
+                ButtonType::Hide => on_hide_clicked(window),
+                ButtonType::Refresh => on_refresh_clicked(),
+                ButtonType::Play => on_play_clicked(),
+            }
         }
     }
 }
@@ -260,9 +263,10 @@ fn on_refresh_clicked() {
     *TIMER.lock().unwrap() = timer;
 }
 
-fn on_hide_clicked() {
-    // TODO: hide window decorations
-    println!("hide clicked");
+fn on_hide_clicked(window: &mut Window) {
+    let bordered = !(*BORDERED.lock().unwrap());
+    window.set_bordered(bordered);
+    *BORDERED.lock().unwrap() = bordered;
 }
 
 fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
