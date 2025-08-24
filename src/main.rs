@@ -22,7 +22,6 @@ enum State {
     Running,
     Paused,
     Done,
-    Quit,
 }
 
 #[derive(Copy, Clone)]
