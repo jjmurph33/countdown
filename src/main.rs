@@ -1,15 +1,15 @@
 extern crate sdl2;
 
-use sdl2::pixels::Color;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::rect::{Rect,Point};
-use sdl2::render::{Texture, WindowCanvas};
-use sdl2::image::LoadTexture;
-use sdl2::mouse;
-use std::time::Duration;
-use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use sdl2::event::Event;
+use sdl2::image::LoadTexture;
+use sdl2::keyboard::Keycode;
+use sdl2::mouse;
+use sdl2::pixels::Color;
+use sdl2::rect::{Point, Rect};
+use sdl2::render::{Texture, WindowCanvas};
+use std::sync::Mutex;
+use std::time::Duration;
 
 const WINDOW_WIDTH: i32 = 250;
 const WINDOW_HEIGHT: i32 = 70;
@@ -22,8 +22,8 @@ enum ButtonType {
 
 struct Button {
     name: ButtonType,
-    rect: Rect, // position on the screen
-    texture_rect: Rect, // position in the texture
+    rect: Rect,                         // position on the screen
+    texture_rect: Rect,                 // position in the texture
     click: Box<dyn Fn() + Send + Sync>, // function to call when clicked
 }
 
@@ -32,14 +32,14 @@ static PAUSED: Mutex<bool> = Mutex::new(false);
 static TIMER_MAX: Mutex<i32> = Mutex::new(500); // start value of timer
 static TIMER: Mutex<i32> = Mutex::new(500); // countdown timer in seconds
 
-
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let timer_subsystem = sdl_context.timer().unwrap();
     let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG).unwrap();
 
-    let window = video_subsystem.window("countdown", WINDOW_WIDTH as u32,WINDOW_HEIGHT as u32)
+    let window = video_subsystem
+        .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
         .position_centered()
         .build()
         .unwrap();
@@ -59,33 +59,29 @@ pub fn main() {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} => {
-                    break 'running
-                },
-                Event::KeyDown { keycode, .. } => {
-                    match keycode {
-                        Some(Keycode::Escape) => {
-                            break 'running
-                        }
-                        _ => {
-                            let keycode = keycode.unwrap_or(Keycode::Space);
-                            let keyname = keycode.name();
-                            println!("{keyname}");
-                        }
+                Event::Quit { .. } => break 'running,
+                Event::KeyDown { keycode, .. } => match keycode {
+                    Some(Keycode::Escape) => break 'running,
+                    _ => {
+                        let keycode = keycode.unwrap_or(Keycode::Space);
+                        let keyname = keycode.name();
+                        println!("{keyname}");
                     }
                 },
-                Event::MouseButtonDown { mouse_btn, x, y, .. } => {
+                Event::MouseButtonDown {
+                    mouse_btn, x, y, ..
+                } => {
                     match mouse_btn {
                         mouse::MouseButton::Left => {
-                            check_buttons(x,y);
+                            check_buttons(x, y);
                             //println!("left {x} {y}");
-                        },
+                        }
                         mouse::MouseButton::Right => {
-                            println!("right {x} {y}");
-                        },
+                            println!("right click {x} {y}");
+                        }
                         _ => {}
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -118,12 +114,12 @@ pub fn main() {
         let y: i32 = offset;
         let timer_str = timer_to_string(*TIMER.lock().unwrap());
         for c in timer_str.chars() {
-            draw_char(&mut canvas,&char_texture,c,x,y);
+            draw_char(&mut canvas, &char_texture, c, x, y);
             x += 32;
         }
 
         // draw the buttons
-        draw_buttons(&mut canvas,&button_texture);
+        draw_buttons(&mut canvas, &button_texture);
 
         canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
@@ -141,15 +137,15 @@ fn init_buttons() -> Vec<Button> {
     let y = WINDOW_HEIGHT - 24 - offset;
     v.push(Button {
         name: ButtonType::Refresh,
-        rect: Rect::new(x,y,24,24),
-        texture_rect: Rect::new(64*2,0,64,64),
+        rect: Rect::new(x, y, 24, 24),
+        texture_rect: Rect::new(64 * 2, 0, 64, 64),
         click: Box::new(on_refresh_clicked),
     });
     x = x - 24 - offset;
     v.push(Button {
         name: ButtonType::Play,
-        rect: Rect::new(x,y,24,24),
-        texture_rect: Rect::new(0,0,64,64),
+        rect: Rect::new(x, y, 24, 24),
+        texture_rect: Rect::new(0, 0, 64, 64),
         click: Box::new(on_play_clicked),
     });
     v
@@ -168,8 +164,8 @@ fn on_refresh_clicked() {
     *TIMER.lock().unwrap() = *TIMER_MAX.lock().unwrap();
 }
 
-fn check_buttons(x: i32, y:i32) {
-    let p = Point::new(x,y);
+fn check_buttons(x: i32, y: i32) {
+    let p = Point::new(x, y);
     let buttons = BUTTONS.lock().unwrap();
     for b in buttons.iter() {
         if b.rect.contains_point(p) {
@@ -184,11 +180,11 @@ fn timer_to_string(timer: i32) -> String {
 
     let mut mins = mins.to_string();
     if mins.len() == 1 {
-        mins.insert(0,'0');
+        mins.insert(0, '0');
     }
     let mut secs = secs.to_string();
     if secs.len() == 1 {
-        secs.insert(0,'0');
+        secs.insert(0, '0');
     }
     let mut timer_str = String::new();
     timer_str.push_str(&mins);
@@ -197,7 +193,7 @@ fn timer_to_string(timer: i32) -> String {
     timer_str
 }
 
-fn draw_buttons(canvas: &mut WindowCanvas,button_texture: &Texture) {
+fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
     let buttons = BUTTONS.lock().unwrap();
     for b in buttons.iter() {
         let mut src_rect = b.texture_rect;
@@ -207,22 +203,22 @@ fn draw_buttons(canvas: &mut WindowCanvas,button_texture: &Texture) {
                 if !paused {
                     src_rect.x = 64 // show the pause image
                 }
-            },
+            }
             _ => {}
         }
-        canvas.copy(&button_texture,src_rect,b.rect).unwrap();
+        canvas.copy(&button_texture, src_rect, b.rect).unwrap();
     }
 }
 
-fn draw_char(canvas: &mut WindowCanvas,char_texture: &Texture,c: char,x: i32,y:i32) {
+fn draw_char(canvas: &mut WindowCanvas, char_texture: &Texture, c: char, x: i32, y: i32) {
     let src_rect = char_rect(c);
-    let dst_rect = Rect::new(x,y,32,32);
-    canvas.copy(&char_texture,src_rect,dst_rect).unwrap();
+    let dst_rect = Rect::new(x, y, 32, 32);
+    canvas.copy(&char_texture, src_rect, dst_rect).unwrap();
 }
 
 fn char_rect(c: char) -> Rect {
     let ord = (c as i32) - 32;
     let x = (ord % 10) * 64;
     let y = (ord / 10) * 64;
-    Rect::new(x,y,64,64)
+    Rect::new(x, y, 64, 64)
 }
