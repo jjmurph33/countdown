@@ -16,6 +16,21 @@ use std::time::Duration;
 const WINDOW_WIDTH: i32 = 250;
 const WINDOW_HEIGHT: i32 = 70;
 
+#[derive(PartialEq, Clone, Copy)]
+enum State {
+    Running,
+    Paused,
+    Done,
+    Quit,
+}
+
+#[derive(Copy, Clone)]
+struct Timer {
+    state: State,
+    current: i32, // countdown time in milliseconds
+    max: i32,     // start value of timer
+}
+
 #[derive(Debug)]
 enum ButtonType {
     Play,
@@ -29,15 +44,18 @@ struct Button {
     click: Box<dyn Fn() + Send + Sync>, // function to call when clicked
 }
 
+static TIMER: Mutex<Timer> = Mutex::new(Timer {
+    state: State::Running,
+    current: 0,
+    max: 0,
+});
+
 static BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
-static PAUSED: Mutex<bool> = Mutex::new(false);
-static TIMER_MAX: Mutex<i32> = Mutex::new(0); // start value of timer
-static TIMER: Mutex<i32> = Mutex::new(0); // countdown timer in milliseconds
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
 
-    // set the countdown timer from the command line
+    // get the countdown time from the command line
     // default is 15 minutes
     // max is 100 minutes
     let mut timer_minutes = 15;
@@ -47,8 +65,14 @@ pub fn main() {
     if timer_minutes > 100 {
         timer_minutes = 100;
     }
-    *TIMER_MAX.lock().unwrap() = timer_minutes * 60 * 1000;
-    *TIMER.lock().unwrap() = *TIMER_MAX.lock().unwrap();
+
+    {
+        // set the timer
+        let mut timer = *TIMER.lock().unwrap();
+        timer.max = timer_minutes * 60 * 1000;
+        timer.current = timer.max;
+        *TIMER.lock().unwrap() = timer;
+    }
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -67,8 +91,8 @@ pub fn main() {
     let mut textures = HashMap::new();
     let texture = texture_creator.load_texture("res/chars.png").unwrap();
     textures.insert("chars", texture);
-    let texure = texture_creator.load_texture("res/buttons.png").unwrap();
-    textures.insert("buttons", texure);
+    let texture = texture_creator.load_texture("res/buttons.png").unwrap();
+    textures.insert("buttons", texture);
 
     *BUTTONS.lock().unwrap() = init_buttons();
 
@@ -82,9 +106,9 @@ pub fn main() {
                 Event::KeyDown { keycode, .. } => match keycode {
                     Some(Keycode::Escape) => break 'running,
                     _ => {
-                        let keycode = keycode.unwrap_or(Keycode::Space);
-                        let keyname = keycode.name();
-                        println!("{keyname}");
+                        //let keycode = keycode.unwrap_or(Keycode::Space);
+                        //let keyname = keycode.name();
+                        //println!("{keyname}");
                     }
                 },
                 Event::MouseButtonDown {
@@ -96,7 +120,7 @@ pub fn main() {
                             //println!("left {x} {y}");
                         }
                         mouse::MouseButton::Right => {
-                            println!("right click {x} {y}");
+                            //println!("right click {x} {y}");
                         }
                         _ => {}
                     }
@@ -109,8 +133,8 @@ pub fn main() {
         ticks = timer_subsystem.ticks64();
         let elapsed_time = (ticks - last_ticks) as i32;
 
-        let paused = *PAUSED.lock().unwrap();
-        if !paused {
+        let state = (*TIMER.lock().unwrap()).state;
+        if state == State::Running {
             update(elapsed_time);
         }
 
@@ -122,9 +146,11 @@ pub fn main() {
 
 fn update(elapsed_time: i32) {
     let mut timer = *TIMER.lock().unwrap();
-    timer -= elapsed_time;
-    if timer < 0 {
-        timer = 0;
+    timer.current -= elapsed_time;
+    if timer.current < 0 {
+        timer.current = 0;
+        timer.state = State::Done;
+        println!("Done!");
     }
     *TIMER.lock().unwrap() = timer;
 }
@@ -138,7 +164,7 @@ fn draw(canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>) {
     let offset: i32 = 8;
     let mut x: i32 = offset;
     let y: i32 = offset;
-    let timer_str = timer_to_string(*TIMER.lock().unwrap());
+    let timer_str = timer_to_string((*TIMER.lock().unwrap()).current);
     let texture = textures.get("chars").unwrap();
     for c in timer_str.chars() {
         draw_char(canvas, texture, c, x, y);
@@ -203,26 +229,37 @@ fn check_buttons(x: i32, y: i32) {
 }
 
 fn on_play_clicked() {
-    let paused = *PAUSED.lock().unwrap();
-    if paused {
-        *PAUSED.lock().unwrap() = false;
-    } else {
-        *PAUSED.lock().unwrap() = true;
+    let mut timer = *TIMER.lock().unwrap();
+    match timer.state {
+        State::Paused => {
+            timer.state = State::Running;
+            *TIMER.lock().unwrap() = timer;
+        }
+        State::Running => {
+            timer.state = State::Paused;
+            *TIMER.lock().unwrap() = timer;
+        }
+        _ => {}
     }
 }
 
 fn on_refresh_clicked() {
-    *TIMER.lock().unwrap() = *TIMER_MAX.lock().unwrap();
+    let mut timer = *TIMER.lock().unwrap();
+    timer.current = timer.max;
+    if timer.state == State::Done {
+        timer.state = State::Paused;
+    }
+    *TIMER.lock().unwrap() = timer;
 }
 
 fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
+    let timer = *TIMER.lock().unwrap();
     let buttons = BUTTONS.lock().unwrap();
     for b in buttons.iter() {
         let mut src_rect = b.texture_rect;
         match b.name {
             ButtonType::Play => {
-                let paused = *PAUSED.lock().unwrap();
-                if !paused {
+                if timer.state == State::Running {
                     src_rect.x = 64 // show the pause image
                 }
             }
