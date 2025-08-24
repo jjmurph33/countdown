@@ -8,6 +8,7 @@ use sdl2::mouse;
 use sdl2::pixels::Color;
 use sdl2::rect::{Point, Rect};
 use sdl2::render::{Texture, WindowCanvas};
+use std::env;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -29,10 +30,25 @@ struct Button {
 
 static BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
 static PAUSED: Mutex<bool> = Mutex::new(false);
-static TIMER_MAX: Mutex<i32> = Mutex::new(500000); // start value of timer
-static TIMER: Mutex<i32> = Mutex::new(500000); // countdown timer in milliseconds
+static TIMER_MAX: Mutex<i32> = Mutex::new(0); // start value of timer
+static TIMER: Mutex<i32> = Mutex::new(0); // countdown timer in milliseconds
 
 pub fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    // set the countdown timer from the command line
+    // default is 15 minutes
+    // max is 100 minutes
+    let mut timer_minutes = 15;
+    if args.len() > 1 {
+        timer_minutes = args[1].parse().unwrap_or(15);
+    }
+    if timer_minutes > 100 {
+        timer_minutes = 100;
+    }
+    *TIMER_MAX.lock().unwrap() = timer_minutes * 60 * 1000;
+    *TIMER.lock().unwrap() = *TIMER_MAX.lock().unwrap();
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let timer_subsystem = sdl_context.timer().unwrap();
@@ -91,12 +107,7 @@ pub fn main() {
 
         let paused = *PAUSED.lock().unwrap();
         if !paused {
-            let mut timer = *TIMER.lock().unwrap();
-            timer -= elapsed_time;
-            if timer < 0 {
-                timer = 0;
-            }
-            *TIMER.lock().unwrap() = timer;
+            update(elapsed_time);
         }
 
         // clear the screen
@@ -121,8 +132,33 @@ pub fn main() {
     }
 }
 
-fn update(dt: u64) {
-    //println!("ticks: {dt}");
+fn update(elapsed_time: i32) {
+    let mut timer = *TIMER.lock().unwrap();
+    timer -= elapsed_time;
+    if timer < 0 {
+        timer = 0;
+    }
+    *TIMER.lock().unwrap() = timer;
+}
+
+fn timer_to_string(timer: i32) -> String {
+    let secs = timer / 1000;
+    let mins = secs / 60;
+    let secs = secs % 60;
+
+    let mut mins = mins.to_string();
+    if mins.len() == 1 {
+        mins.insert(0, '0');
+    }
+    let mut secs = secs.to_string();
+    if secs.len() == 1 {
+        secs.insert(0, '0');
+    }
+    let mut timer_str = String::new();
+    timer_str.push_str(&mins);
+    timer_str.push_str(":");
+    timer_str.push_str(&secs);
+    timer_str
 }
 
 fn init_buttons() -> Vec<Button> {
@@ -146,6 +182,16 @@ fn init_buttons() -> Vec<Button> {
     v
 }
 
+fn check_buttons(x: i32, y: i32) {
+    let p = Point::new(x, y);
+    let buttons = BUTTONS.lock().unwrap();
+    for b in buttons.iter() {
+        if b.rect.contains_point(p) {
+            (b.click)();
+        }
+    }
+}
+
 fn on_play_clicked() {
     let paused = *PAUSED.lock().unwrap();
     if paused {
@@ -157,36 +203,6 @@ fn on_play_clicked() {
 
 fn on_refresh_clicked() {
     *TIMER.lock().unwrap() = *TIMER_MAX.lock().unwrap();
-}
-
-fn check_buttons(x: i32, y: i32) {
-    let p = Point::new(x, y);
-    let buttons = BUTTONS.lock().unwrap();
-    for b in buttons.iter() {
-        if b.rect.contains_point(p) {
-            (b.click)();
-        }
-    }
-}
-
-fn timer_to_string(timer: i32) -> String {
-    let secs = timer / 1000;
-    let mins = secs / 60;
-    let secs = secs % 60;
-
-    let mut mins = mins.to_string();
-    if mins.len() == 1 {
-        mins.insert(0, '0');
-    }
-    let mut secs = secs.to_string();
-    if secs.len() == 1 {
-        secs.insert(0, '0');
-    }
-    let mut timer_str = String::new();
-    timer_str.push_str(&mins);
-    timer_str.push_str(":");
-    timer_str.push_str(&secs);
-    timer_str
 }
 
 fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
