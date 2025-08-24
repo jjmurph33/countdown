@@ -11,21 +11,26 @@ use std::time::Duration;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
-const WINDOW_WIDTH: i32 = 200;
-const WINDOW_HEIGHT: i32 = 100;
+const WINDOW_WIDTH: i32 = 250;
+const WINDOW_HEIGHT: i32 = 70;
 
+#[derive(Debug)]
 enum ButtonType {
     Play,
-    Pause,
     Refresh,
 }
 
 struct Button {
-    rect: Rect,
+    name: ButtonType,
+    rect: Rect, // position on the screen
+    texture_rect: Rect, // position in the texture
+    click: Box<dyn Fn() + Send + Sync>, // function to call when clicked
 }
 
 static BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
-
+static PAUSED: Mutex<bool> = Mutex::new(false);
+static TIMER_MAX: Mutex<i32> = Mutex::new(500); // start value of timer
+static TIMER: Mutex<i32> = Mutex::new(500); // countdown timer in seconds
 
 
 pub fn main() {
@@ -45,15 +50,10 @@ pub fn main() {
     let char_texture = texture_creator.load_texture("res/chars.png").unwrap();
     let button_texture = texture_creator.load_texture("res/buttons.png").unwrap();
 
-    let mut ticks = timer_subsystem.ticks64();
+    let mut ticks = 0;
     let mut elapsed_ms = 0;
-    let mut timer = 500;
 
-    // create the buttons
-    {
-        let mut buttons = BUTTONS.lock().unwrap();
-        *buttons = init_buttons();
-    }
+    *BUTTONS.lock().unwrap() = init_buttons();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -90,16 +90,22 @@ pub fn main() {
             }
         }
 
-        // update the timer
         let last_ticks = ticks;
         ticks = timer_subsystem.ticks64();
-        elapsed_ms += ticks - last_ticks;
-        if elapsed_ms >= 1000 {
-            timer -= 1;
-            elapsed_ms = 0;
-        }
-        if timer < 0 {
-            timer = 0;
+        let dt = ticks - last_ticks;
+
+        let paused = *PAUSED.lock().unwrap();
+        if !paused {
+            elapsed_ms += dt;
+            let mut timer_guard = TIMER.lock().unwrap();
+            if elapsed_ms >= 1000 {
+                *timer_guard -= 1;
+                elapsed_ms = 0;
+            }
+            if *timer_guard < 0 {
+                *timer_guard = 0;
+            }
+            update(dt);
         }
 
         // clear the screen
@@ -109,39 +115,65 @@ pub fn main() {
         // draw the timer
         let offset: i32 = 8;
         let mut x: i32 = offset;
-        let mut y: i32 = offset;
-        let timer_str = timer_to_string(timer);
+        let y: i32 = offset;
+        let timer_str = timer_to_string(*TIMER.lock().unwrap());
         for c in timer_str.chars() {
             draw_char(&mut canvas,&char_texture,c,x,y);
             x += 32;
         }
 
         // draw the buttons
-        x = WINDOW_WIDTH - 32 - offset;
-        y = WINDOW_HEIGHT - 32 - offset;
-        draw_button(&mut canvas,&button_texture,ButtonType::Refresh,x,y);
+        draw_buttons(&mut canvas,&button_texture);
 
         canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
+fn update(dt: u64) {
+    //println!("ticks: {dt}");
+}
+
 fn init_buttons() -> Vec<Button> {
     let mut v = Vec::new();
-    // Add the refresh button
-    let x = WINDOW_WIDTH - 32 - 8;
-    let y = WINDOW_HEIGHT - 32 - 8;
-    v.push(Button { rect: Rect::new(x, y, 32, 32) });
+    let offset = 8;
+    let mut x = WINDOW_WIDTH - 24 - offset;
+    let y = WINDOW_HEIGHT - 24 - offset;
+    v.push(Button {
+        name: ButtonType::Refresh,
+        rect: Rect::new(x,y,24,24),
+        texture_rect: Rect::new(64*2,0,64,64),
+        click: Box::new(on_refresh_clicked),
+    });
+    x = x - 24 - offset;
+    v.push(Button {
+        name: ButtonType::Play,
+        rect: Rect::new(x,y,24,24),
+        texture_rect: Rect::new(0,0,64,64),
+        click: Box::new(on_play_clicked),
+    });
     v
+}
+
+fn on_play_clicked() {
+    let paused = *PAUSED.lock().unwrap();
+    if paused {
+        *PAUSED.lock().unwrap() = false;
+    } else {
+        *PAUSED.lock().unwrap() = true;
+    }
+}
+
+fn on_refresh_clicked() {
+    *TIMER.lock().unwrap() = *TIMER_MAX.lock().unwrap();
 }
 
 fn check_buttons(x: i32, y:i32) {
     let p = Point::new(x,y);
-
     let buttons = BUTTONS.lock().unwrap();
     for b in buttons.iter() {
         if b.rect.contains_point(p) {
-            println!("Button clicked at {:?}", p);
+            (b.click)();
         }
     }
 }
@@ -162,20 +194,24 @@ fn timer_to_string(timer: i32) -> String {
     timer_str.push_str(&mins);
     timer_str.push_str(":");
     timer_str.push_str(&secs);
-
     timer_str
 }
 
-fn draw_button(canvas: &mut WindowCanvas,button_texture: &Texture,button: ButtonType,x: i32,y: i32) {
-    let mut src_rect = Rect::new(0,0,64,64);
-    match button {
-        ButtonType::Refresh => {
-            src_rect.set_x(64*2);
-        },
-        _ => {}
+fn draw_buttons(canvas: &mut WindowCanvas,button_texture: &Texture) {
+    let buttons = BUTTONS.lock().unwrap();
+    for b in buttons.iter() {
+        let mut src_rect = b.texture_rect;
+        match b.name {
+            ButtonType::Play => {
+                let paused = *PAUSED.lock().unwrap();
+                if !paused {
+                    src_rect.x = 64 // show the pause image
+                }
+            },
+            _ => {}
+        }
+        canvas.copy(&button_texture,src_rect,b.rect).unwrap();
     }
-    let dst_rect = Rect::new(x,y,32,32);
-    canvas.copy(&button_texture,src_rect,dst_rect).unwrap();    
 }
 
 fn draw_char(canvas: &mut WindowCanvas,char_texture: &Texture,c: char,x: i32,y:i32) {
