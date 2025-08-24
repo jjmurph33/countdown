@@ -13,8 +13,8 @@ use std::env;
 use std::sync::Mutex;
 use std::time::Duration;
 
-const WINDOW_WIDTH: i32 = 250;
-const WINDOW_HEIGHT: i32 = 70;
+const WINDOW_WIDTH: i32 = 285;
+const WINDOW_HEIGHT: i32 = 50;
 
 #[derive(PartialEq, Clone, Copy)]
 enum State {
@@ -35,6 +35,7 @@ struct Timer {
 enum ButtonType {
     Play,
     Refresh,
+    Hide,
 }
 
 struct Button {
@@ -199,9 +200,16 @@ fn timer_to_string(timer: i32) -> String {
 
 fn init_buttons() -> Vec<Button> {
     let mut v = Vec::new();
-    let offset = 8;
+    let offset = 0;
     let mut x = WINDOW_WIDTH - 24 - offset;
     let y = WINDOW_HEIGHT - 24 - offset;
+    v.push(Button {
+        name: ButtonType::Hide,
+        rect: Rect::new(x, y, 24, 24),
+        texture_rect: Rect::new(64 * 3, 0, 64, 64),
+        click: Box::new(on_hide_clicked),
+    });
+    x = x - 24 - offset;
     v.push(Button {
         name: ButtonType::Refresh,
         rect: Rect::new(x, y, 24, 24),
@@ -250,6 +258,11 @@ fn on_refresh_clicked() {
         timer.state = State::Paused;
     }
     *TIMER.lock().unwrap() = timer;
+}
+
+fn on_hide_clicked() {
+    // TODO: hide window decorations
+    println!("hide clicked");
 }
 
 fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
