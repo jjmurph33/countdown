@@ -51,7 +51,7 @@ static TIMER: Mutex<Timer> = Mutex::new(Timer {
 });
 
 static BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
-static BORDERED: Mutex<bool> = Mutex::new(false); // window borders
+static BORDERED: Mutex<bool> = Mutex::new(true); // window borders
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
@@ -83,7 +83,6 @@ pub fn main() {
     let window = video_subsystem
         .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
         .position_centered()
-        .borderless()
         .build()
         .unwrap();
 
