@@ -74,7 +74,6 @@ pub fn main() {
         timer.current = timer.max;
         *TIMER.lock().unwrap() = timer;
     }
-
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let timer_subsystem = sdl_context.timer().unwrap();
@@ -132,7 +131,7 @@ pub fn main() {
 
         let last_ticks = ticks;
         ticks = timer_subsystem.ticks64();
-        let elapsed_time = (ticks - last_ticks) as i32;
+        let elapsed_time = ticks - last_ticks;
 
         let state = (*TIMER.lock().unwrap()).state;
         if state == State::Running {
@@ -145,10 +144,10 @@ pub fn main() {
     }
 }
 
-fn update(elapsed_time: i32) {
+fn update(elapsed_time: u64) {
     let mut timer = *TIMER.lock().unwrap();
-    timer.current -= elapsed_time;
-    if timer.current < 0 {
+    timer.current -= elapsed_time as i32;
+    if timer.current <= 0 {
         timer.current = 0;
         timer.state = State::Done;
         println!("Done!");
@@ -157,15 +156,22 @@ fn update(elapsed_time: i32) {
 }
 
 fn draw(canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>) {
+    let timer = *TIMER.lock().unwrap();
+
     // clear the screen
-    canvas.set_draw_color(Color::RGB(200, 200, 255));
+    let bg_color = if timer.state == State::Done {
+        Color::RGB(255, 100, 100) // Red when done
+    } else {
+        Color::RGB(200, 200, 255)
+    };
+    canvas.set_draw_color(bg_color);
     canvas.clear();
 
     // draw the timer
-    let offset: i32 = 8;
-    let mut x: i32 = offset;
-    let y: i32 = offset;
-    let timer_str = timer_to_string((*TIMER.lock().unwrap()).current);
+    let offset = 8;
+    let mut x = offset;
+    let y = offset;
+    let timer_str = timer_to_string(timer.current);
     let texture = textures.get("chars").unwrap();
     for c in timer_str.chars() {
         draw_char(canvas, texture, c, x, y);
