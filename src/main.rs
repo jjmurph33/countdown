@@ -36,12 +36,37 @@ enum ButtonType {
     Play,
     Refresh,
     Hide,
+    Settings,
+    Mute,
 }
 
 struct Button {
     name: ButtonType,
-    rect: Rect,         // position on the screen
-    texture_rect: Rect, // position in the texture
+    rect: Rect,             // position on the screen
+    texture_rect: Rect,     // position in the texture
+    texture_rect_alt: Rect, // position in the texture of the alternate icon (ex: play/pause)
+}
+
+impl Button {
+    fn new(
+        name: ButtonType,
+        screen_x: i32,
+        screen_y: i32,
+        x_offset: i32,
+        y_offset: i32,
+        alt_x_offset: i32,
+        alt_y_offset: i32,
+    ) -> Self {
+        let rect = Rect::new(screen_x, screen_y, 24, 24);
+        let texture_rect = Rect::new(64 * x_offset, 64 * y_offset, 64, 64);
+        let texture_rect_alt = Rect::new(64 * alt_x_offset, 64 * alt_y_offset, 64, 64);
+        Button {
+            name,
+            rect,
+            texture_rect,
+            texture_rect_alt,
+        }
+    }
 }
 
 static TIMER: Mutex<Timer> = Mutex::new(Timer {
@@ -209,23 +234,16 @@ fn init_buttons() -> Vec<Button> {
     let offset = 0;
     let mut x = WINDOW_WIDTH - 24 - offset;
     let y = WINDOW_HEIGHT - 24 - offset;
-    v.push(Button {
-        name: ButtonType::Hide,
-        rect: Rect::new(x, y, 24, 24),
-        texture_rect: Rect::new(64 * 3, 0, 64, 64),
-    });
+
+    v.push(Button::new(ButtonType::Settings, x, y, 4, 0, 4, 0));
     x = x - 24 - offset;
-    v.push(Button {
-        name: ButtonType::Refresh,
-        rect: Rect::new(x, y, 24, 24),
-        texture_rect: Rect::new(64 * 2, 0, 64, 64),
-    });
+    v.push(Button::new(ButtonType::Mute, x, y, 4, 1, 3, 1));
     x = x - 24 - offset;
-    v.push(Button {
-        name: ButtonType::Play,
-        rect: Rect::new(x, y, 24, 24),
-        texture_rect: Rect::new(0, 0, 64, 64),
-    });
+    v.push(Button::new(ButtonType::Hide, x, y, 6, 0, 5, 0));
+    x = x - 24 - offset;
+    v.push(Button::new(ButtonType::Refresh, x, y, 3, 0, 3, 0));
+    x = x - 24 - offset;
+    v.push(Button::new(ButtonType::Play, x, y, 1, 0, 0, 0));
     v
 }
 
@@ -238,6 +256,8 @@ fn check_buttons(x: i32, y: i32, window: &mut Window) {
                 ButtonType::Hide => on_hide_clicked(window),
                 ButtonType::Refresh => on_refresh_clicked(),
                 ButtonType::Play => on_play_clicked(),
+                ButtonType::Settings => on_settings_clicked(),
+                ButtonType::Mute => on_mute_clicked(),
             }
         }
     }
@@ -273,6 +293,14 @@ fn on_hide_clicked(window: &mut Window) {
     *BORDERED.lock().unwrap() = bordered;
 }
 
+fn on_settings_clicked() {
+    println!("Settings clicked");
+}
+
+fn on_mute_clicked() {
+    println!("Mute clicked");
+}
+
 fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
     let timer = *TIMER.lock().unwrap();
     let buttons = BUTTONS.lock().unwrap();
@@ -281,7 +309,13 @@ fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
         match b.name {
             ButtonType::Play => {
                 if timer.state == State::Running {
-                    src_rect.x = 64 // show the pause image
+                    //src_rect.x = 64 // show the pause image
+                    src_rect = b.texture_rect_alt;
+                }
+            }
+            ButtonType::Hide => {
+                if !(*BORDERED.lock().unwrap()) {
+                    src_rect = b.texture_rect_alt;
                 }
             }
             _ => {}
