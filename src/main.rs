@@ -14,8 +14,8 @@ use std::env;
 use std::sync::Mutex;
 use std::time::Duration;
 
-const WINDOW_WIDTH: i32 = 285;
-const WINDOW_HEIGHT: i32 = 50;
+const WINDOW_WIDTH: i32 = 185;
+const WINDOW_HEIGHT: i32 = 70;
 
 #[derive(PartialEq, Clone, Copy)]
 enum State {
@@ -114,10 +114,8 @@ pub fn main() {
     let texture_creator = canvas.texture_creator();
 
     let mut textures = HashMap::new();
-    let texture = texture_creator.load_texture("res/chars.png").unwrap();
-    textures.insert("chars", texture);
-    let texture = texture_creator.load_texture("res/buttons.png").unwrap();
-    textures.insert("buttons", texture);
+    textures.insert("chars", texture_creator.load_texture("res/chars.png").unwrap());
+    textures.insert("buttons", texture_creator.load_texture("res/buttons.png").unwrap());
 
     *BUTTONS.lock().unwrap() = init_buttons();
 
@@ -130,26 +128,13 @@ pub fn main() {
                 Event::Quit { .. } => break 'running,
                 Event::KeyDown { keycode, .. } => match keycode {
                     Some(Keycode::Escape) => break 'running,
-                    _ => {
-                        //let keycode = keycode.unwrap_or(Keycode::Space);
-                        //let keyname = keycode.name();
-                        //println!("{keyname}");
+                    _ => {}
+                },
+                Event::MouseButtonDown {mouse_btn, x, y, ..} => {
+                    if mouse_btn == mouse::MouseButton::Left {
+                        check_buttons(x, y, canvas.window_mut());
                     }
                 },
-                Event::MouseButtonDown {
-                    mouse_btn, x, y, ..
-                } => {
-                    match mouse_btn {
-                        mouse::MouseButton::Left => {
-                            check_buttons(x, y, canvas.window_mut());
-                            //println!("left {x} {y}");
-                        }
-                        mouse::MouseButton::Right => {
-                            //println!("right click {x} {y}");
-                        }
-                        _ => {}
-                    }
-                }
                 _ => {}
             }
         }
@@ -232,7 +217,7 @@ fn timer_to_string(timer: i32) -> String {
 fn init_buttons() -> Vec<Button> {
     let mut v = Vec::new();
     let offset = 0;
-    let mut x = WINDOW_WIDTH - 24 - offset;
+    let mut x = WINDOW_WIDTH - 62 - offset;
     let y = WINDOW_HEIGHT - 24 - offset;
 
     v.push(Button::new(ButtonType::Settings, x, y, 4, 0, 4, 0));
@@ -308,8 +293,8 @@ fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
         let mut src_rect = b.texture_rect;
         match b.name {
             ButtonType::Play => {
-                if timer.state == State::Running {
-                    //src_rect.x = 64 // show the pause image
+                if timer.state == State::Paused {
+                    //src_rect.x = 64 // show the play image
                     src_rect = b.texture_rect_alt;
                 }
             }
@@ -331,6 +316,7 @@ fn draw_char(canvas: &mut WindowCanvas, char_texture: &Texture, c: char, x: i32,
 }
 
 fn char_rect(c: char) -> Rect {
+    // the position of the character in the texture
     let ord = (c as i32) - 32;
     let x = (ord % 10) * 64;
     let y = (ord / 10) * 64;
