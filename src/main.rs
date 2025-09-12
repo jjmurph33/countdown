@@ -4,13 +4,13 @@ use once_cell::sync::Lazy;
 use sdl2::event::Event;
 use sdl2::image::LoadTexture;
 use sdl2::keyboard::Keycode;
-use sdl2::{mouse, EventPump};
 use sdl2::pixels::Color;
 use sdl2::rect::{Point, Rect};
 use sdl2::render::TextureQuery;
 use sdl2::render::{Texture, WindowCanvas};
 use sdl2::ttf::Font;
 use sdl2::video::Window;
+use sdl2::{EventPump, mouse};
 use std::collections::HashMap;
 use std::env;
 use std::sync::Mutex;
@@ -20,7 +20,8 @@ const WINDOW_WIDTH: i32 = 185;
 const WINDOW_HEIGHT: i32 = 70;
 
 const PROMPT_OK: (i32, i32, i32, i32) = (WINDOW_WIDTH / 4, WINDOW_HEIGHT / 2, 17, 14);
-const PROMPT_CANCEL: (i32, i32, i32, i32) = (WINDOW_WIDTH - WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 39, 14);
+const PROMPT_CANCEL: (i32, i32, i32, i32) =
+    (WINDOW_WIDTH - WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 39, 14);
 
 #[derive(PartialEq, Clone, Copy)]
 enum PromptType {
@@ -82,6 +83,13 @@ impl Button {
     }
 }
 
+struct App {
+    state: State,
+    current: i32, // countdown time in milliseconds
+    max: i32,     // start value of timer
+    buttons: [Button; 5],
+}
+
 static TIMER: Mutex<Timer> = Mutex::new(Timer {
     state: State::Running,
     current: 0,
@@ -134,9 +142,9 @@ pub fn main() {
     // load the textures
     let mut textures = HashMap::new();
     let texture = texture_creator.load_texture("res/chars.png").unwrap();
-    textures.insert("chars",texture);
+    textures.insert("chars", texture);
     let texture = texture_creator.load_texture("res/buttons.png").unwrap();
-    textures.insert("buttons",texture);
+    textures.insert("buttons", texture);
 
     // create the buttons
     *BUTTONS.lock().unwrap() = init_buttons();
@@ -146,12 +154,12 @@ pub fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
     loop {
         let state = (*TIMER.lock().unwrap()).state;
-        
+
         if state == State::Exiting {
             break;
         }
 
-        handle_events(&mut event_pump,&mut canvas);
+        handle_events(&mut event_pump, &mut canvas);
 
         let last_ticks = ticks;
         ticks = timer_subsystem.ticks64();
@@ -167,14 +175,14 @@ pub fn main() {
     }
 }
 
-fn handle_events(event_pump: &mut EventPump,canvas: &mut WindowCanvas) {
+fn handle_events(event_pump: &mut EventPump, canvas: &mut WindowCanvas) {
     for event in event_pump.poll_iter() {
         match event {
             Event::Quit { .. } => {
                 let mut timer = *TIMER.lock().unwrap();
                 timer.state = State::Prompt(PromptType::Exit);
                 *TIMER.lock().unwrap() = timer;
-            },
+            }
             Event::KeyDown { keycode, .. } => match keycode {
                 Some(Keycode::Escape) => {
                     let mut timer = *TIMER.lock().unwrap();
@@ -210,7 +218,7 @@ fn update(elapsed_time: u64) {
     *TIMER.lock().unwrap() = timer;
 }
 
-fn draw(canvas: &mut WindowCanvas,textures: &HashMap<&str, Texture>,font: &Font) {
+fn draw(canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>, font: &Font) {
     let timer = *TIMER.lock().unwrap();
 
     // clear the screen
@@ -286,8 +294,18 @@ fn check_buttons(x: i32, y: i32, window: &mut Window) {
     match timer.state {
         State::Prompt(prompt_type) => {
             // check the Ok / Cancel buttons if in a prompt
-            let ok_rect = Rect::new(PROMPT_OK.0, PROMPT_OK.1, PROMPT_OK.2 as u32, PROMPT_OK.3 as u32);
-            let cancel_rect = Rect::new(PROMPT_CANCEL.0, PROMPT_CANCEL.1, PROMPT_CANCEL.2 as u32, PROMPT_CANCEL.3 as u32);
+            let ok_rect = Rect::new(
+                PROMPT_OK.0,
+                PROMPT_OK.1,
+                PROMPT_OK.2 as u32,
+                PROMPT_OK.3 as u32,
+            );
+            let cancel_rect = Rect::new(
+                PROMPT_CANCEL.0,
+                PROMPT_CANCEL.1,
+                PROMPT_CANCEL.2 as u32,
+                PROMPT_CANCEL.3 as u32,
+            );
             if ok_rect.contains_point(p) {
                 if prompt_type == PromptType::Reset {
                     // reset the timer
@@ -307,7 +325,7 @@ fn check_buttons(x: i32, y: i32, window: &mut Window) {
                 timer.state = State::Paused;
                 *TIMER.lock().unwrap() = timer;
             }
-        },
+        }
         _ => {
             // check the regular buttons
             let buttons = BUTTONS.lock().unwrap();
@@ -404,11 +422,27 @@ fn draw_prompt(canvas: &mut WindowCanvas, font: &Font) {
         State::Prompt(PromptType::Exit) => "Exit?",
         _ => "",
     };
-    draw_text(canvas, font, message, WINDOW_WIDTH/2 - WINDOW_WIDTH/4, 10);    
+    draw_text(
+        canvas,
+        font,
+        message,
+        WINDOW_WIDTH / 2 - WINDOW_WIDTH / 4,
+        10,
+    );
     draw_text(canvas, font, "OK", PROMPT_OK.0, PROMPT_OK.1);
     draw_text(canvas, font, "Cancel", PROMPT_CANCEL.0, PROMPT_CANCEL.1);
-    let ok_rect = Rect::new(PROMPT_OK.0 - 2, PROMPT_OK.1 - 2, PROMPT_OK.2 as u32 + 4, PROMPT_OK.3 as u32 + 4);
-    let cancel_rect = Rect::new(PROMPT_CANCEL.0 - 2, PROMPT_CANCEL.1 - 2, PROMPT_CANCEL.2 as u32 + 4, PROMPT_CANCEL.3 as u32 + 4);
+    let ok_rect = Rect::new(
+        PROMPT_OK.0 - 2,
+        PROMPT_OK.1 - 2,
+        PROMPT_OK.2 as u32 + 4,
+        PROMPT_OK.3 as u32 + 4,
+    );
+    let cancel_rect = Rect::new(
+        PROMPT_CANCEL.0 - 2,
+        PROMPT_CANCEL.1 - 2,
+        PROMPT_CANCEL.2 as u32 + 4,
+        PROMPT_CANCEL.3 as u32 + 4,
+    );
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.draw_rect(ok_rect).unwrap();
     canvas.draw_rect(cancel_rect).unwrap();
@@ -433,4 +467,3 @@ fn draw_text(canvas: &mut WindowCanvas, font: &Font, text: &str, x: i32, y: i32)
 
     target
 }
-
