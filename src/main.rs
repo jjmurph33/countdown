@@ -1,6 +1,5 @@
 extern crate sdl2;
 
-use once_cell::sync::Lazy;
 use sdl2::event::Event;
 use sdl2::image::LoadTexture;
 use sdl2::keyboard::Keycode;
@@ -41,7 +40,7 @@ struct Timer {
     max: i32,     // start value of timer
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum ButtonType {
     Play,
     Refresh,
@@ -52,6 +51,7 @@ enum ButtonType {
     Cancel,
 }
 
+#[derive(Copy, Clone)]
 struct Button {
     name: ButtonType,
     rect: Rect,             // position on the screen
@@ -81,13 +81,13 @@ impl Button {
     }
 }
 
-struct App {
-    state: State,
-    current: i32, // countdown time in milliseconds
-    max: i32,     // start value of timer
-    buttons: [Button; 5],
-    prompt_buttons: [Button; 2],
-}
+// struct App {
+//     state: State,
+//     current: i32, // countdown time in milliseconds
+//     max: i32,     // start value of timer
+//     buttons: [Button; 5],
+//     prompt_buttons: [Button; 2],
+// }
 
 static TIMER: Mutex<Timer> = Mutex::new(Timer {
     state: State::Running,
@@ -95,8 +95,8 @@ static TIMER: Mutex<Timer> = Mutex::new(Timer {
     max: 0,
 });
 
-static BUTTONS: Lazy<Mutex<[Button; 5]>> = Lazy::new(|| Mutex::new(init_buttons()));
-static PROMPT_BUTTONS: Lazy<Mutex<Vec<Button>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static BUTTONS: Mutex<Option<[Button; 5]>> = Mutex::new(None);
+static PROMPT_BUTTONS: Mutex<Option<[Button; 2]>> = Mutex::new(None);
 static BORDERED: Mutex<bool> = Mutex::new(true); // window borders
 
 pub fn main() {
@@ -145,8 +145,9 @@ pub fn main() {
     let texture = texture_creator.load_texture("res/buttons.png").unwrap();
     textures.insert("buttons", texture);
 
-    // buttons are already initialized in the static declaration
-    *PROMPT_BUTTONS.lock().unwrap() = init_prompt_buttons();
+    // create the buttons
+    *BUTTONS.lock().unwrap() = Some(init_buttons());
+    *PROMPT_BUTTONS.lock().unwrap() = Some(init_prompt_buttons());
 
     let mut ticks = 0;
 
@@ -290,29 +291,31 @@ fn init_buttons() -> [Button; 5] {
     [settings, mute, hide, refresh, play]
 }
 
-fn init_prompt_buttons() -> Vec<Button> {
-    let mut v = Vec::new();
+fn init_prompt_buttons() -> [Button; 2] {
     let offset = 0;
     let mut x = WINDOW_WIDTH / 4;
     let y = WINDOW_HEIGHT / 2;
-    v.push(Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1));
+    let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
     x = x + 64 + offset;
-    v.push(Button::new(ButtonType::Cancel, x, y, 6, 1, 6, 1));
-    v
+    let cancel = Button::new(ButtonType::Cancel, x, y, 6, 1, 6, 1);
+    [ok, cancel]
 }
 
 fn check_buttons(x: i32, y: i32, window: &mut Window) {
     let p = Point::new(x, y);
     let buttons = BUTTONS.lock().unwrap();
-    for b in buttons.iter() {
-        if b.rect.contains_point(p) {
-            match b.name {
-                ButtonType::Hide => on_hide_clicked(window),
-                ButtonType::Refresh => on_refresh_clicked(),
-                ButtonType::Play => on_play_clicked(),
-                ButtonType::Settings => on_settings_clicked(),
-                ButtonType::Mute => on_mute_clicked(),
-                _ => {}
+    if let Some(buttons) = buttons.as_ref() {
+        for b in buttons.iter() {
+            if b.rect.contains_point(p) {
+                match b.name {
+                    ButtonType::Hide => on_hide_clicked(window),
+                    ButtonType::Refresh => on_refresh_clicked(),
+                    ButtonType::Play => on_play_clicked(),
+                    ButtonType::Settings => on_settings_clicked(),
+                    ButtonType::Mute => on_mute_clicked(),
+                    _ => {}
+                }
+                return; // Early return after handling a button click
             }
         }
     }
@@ -321,12 +324,15 @@ fn check_buttons(x: i32, y: i32, window: &mut Window) {
 fn check_prompt_buttons(x: i32, y: i32) {
     let p = Point::new(x, y);
     let buttons = PROMPT_BUTTONS.lock().unwrap();
-    for b in buttons.iter() {
-        if b.rect.contains_point(p) {
-            match b.name {
-                ButtonType::Ok => on_ok_clicked(),
-                ButtonType::Cancel => on_cancel_clicked(),
-                _ => {}
+    if let Some(buttons) = buttons.as_ref() {
+        for b in buttons.iter() {
+            if b.rect.contains_point(p) {
+                match b.name {
+                    ButtonType::Ok => on_ok_clicked(),
+                    ButtonType::Cancel => on_cancel_clicked(),
+                    _ => {}
+                }
+                return; // Early return after handling a button click
             }
         }
     }
@@ -400,22 +406,24 @@ fn on_cancel_clicked() {
 fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
     let timer = *TIMER.lock().unwrap();
     let buttons = BUTTONS.lock().unwrap();
-    for b in buttons.iter() {
-        let mut src_rect = b.texture_rect;
-        match b.name {
-            ButtonType::Play => {
-                if timer.state == State::Paused {
-                    src_rect = b.texture_rect_alt;
+    if let Some(buttons) = buttons.as_ref() {
+        for b in buttons.iter() {
+            let mut src_rect = b.texture_rect;
+            match b.name {
+                ButtonType::Play => {
+                    if timer.state == State::Paused {
+                        src_rect = b.texture_rect_alt;
+                    }
                 }
-            }
-            ButtonType::Hide => {
-                if !(*BORDERED.lock().unwrap()) {
-                    src_rect = b.texture_rect_alt;
+                ButtonType::Hide => {
+                    if !(*BORDERED.lock().unwrap()) {
+                        src_rect = b.texture_rect_alt;
+                    }
                 }
+                _ => {}
             }
-            _ => {}
+            canvas.copy(&button_texture, src_rect, b.rect).unwrap();
         }
-        canvas.copy(&button_texture, src_rect, b.rect).unwrap();
     }
 }
 
@@ -440,12 +448,14 @@ fn draw_prompt(canvas: &mut WindowCanvas, font: &Font, button_texture: &Texture)
         State::Prompt(PromptType::Exit) => "Exit?",
         _ => "",
     };
-    draw_text(canvas, font, message, WINDOW_WIDTH / 3, 10);
+    draw_text(canvas, font, message, WINDOW_WIDTH / 4, 10);
     let buttons = PROMPT_BUTTONS.lock().unwrap();
-    for b in buttons.iter() {
-        canvas
-            .copy(&button_texture, b.texture_rect, b.rect)
-            .unwrap();
+    if let Some(buttons) = buttons.as_ref() {
+        for b in buttons.iter() {
+            canvas
+                .copy(&button_texture, b.texture_rect, b.rect)
+                .unwrap();
+        }
     }
 }
 
