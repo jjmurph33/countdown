@@ -28,9 +28,9 @@ struct Args {
     #[arg(short, default_value_t = 0)]
     y: i32, // window Y position
     #[arg(short = 'b')]
-    hide_borders: bool, // hide window borders
+    hide_borders: bool, // hide window borders / decorations
     #[arg(default_value_t = 15,value_parser = clap::value_parser!(i32).range(1..=100))]
-    minutes: i32, // timer start value (between 1 and 100)
+    minutes: i32, // timer start value (between 1 and 100, defaults to 15)
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -55,6 +55,7 @@ enum ButtonType {
     Mute,
     Ok,
     Cancel,
+    Exit,
 }
 
 struct Button {
@@ -94,7 +95,7 @@ struct App {
     muted: bool,
 }
 
-static BUTTONS: Mutex<Option<[Button; 4]>> = Mutex::new(None);
+static BUTTONS: Mutex<Option<[Button; 5]>> = Mutex::new(None);
 static PROMPT_BUTTONS: Mutex<Option<[Button; 2]>> = Mutex::new(None);
 
 pub fn main() {
@@ -267,9 +268,11 @@ fn timer_to_string(timer: i32) -> String {
     timer_str
 }
 
-fn init_buttons() -> [Button; 4] {
+fn init_buttons() -> [Button; 5] {
     let mut x = WINDOW_WIDTH - 24;
     let y = WINDOW_HEIGHT - 24;
+    let exit = Button::new(ButtonType::Exit, x, y, 6, 1, 6, 1);
+    x -= 24;
     let mute = Button::new(ButtonType::Mute, x, y, 4, 1, 3, 1);
     x -= 24;
     let hide = Button::new(ButtonType::Hide, x, y, 6, 0, 5, 0);
@@ -277,7 +280,7 @@ fn init_buttons() -> [Button; 4] {
     let refresh = Button::new(ButtonType::Refresh, x, y, 3, 0, 3, 0);
     x -= 24;
     let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
-    [mute, hide, refresh, play]
+    [exit, mute, hide, refresh, play]
 }
 
 fn init_prompt_buttons() -> [Button; 2] {
@@ -300,6 +303,7 @@ fn check_buttons(x: i32, y: i32, app: &mut App, window: &mut Window) {
                     ButtonType::Refresh => on_refresh_clicked(app),
                     ButtonType::Play => on_play_clicked(app),
                     ButtonType::Mute => on_mute_clicked(app),
+                    ButtonType::Exit => on_exit_clicked(app),
                     _ => {}
                 }
                 return;
@@ -349,6 +353,10 @@ fn on_hide_clicked(app: &mut App, window: &mut Window) {
 fn on_mute_clicked(app: &mut App) {
     app.muted = !app.muted;
     println!("Mute clicked");
+}
+
+fn on_exit_clicked(app: &mut App) {
+    app.state = State::Prompt(PromptType::Exit);
 }
 
 fn on_ok_clicked(app: &mut App) {
