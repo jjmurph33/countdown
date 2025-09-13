@@ -33,25 +33,15 @@ enum State {
     Exiting,
 }
 
-#[derive(Copy, Clone)]
-struct Timer {
-    state: State,
-    current: i32, // countdown time in milliseconds
-    max: i32,     // start value of timer
-}
-
-#[derive(Debug, Copy, Clone)]
 enum ButtonType {
     Play,
     Refresh,
     Hide,
-    Settings,
     Mute,
     Ok,
     Cancel,
 }
 
-#[derive(Copy, Clone)]
 struct Button {
     name: ButtonType,
     rect: Rect,             // position on the screen
@@ -81,23 +71,16 @@ impl Button {
     }
 }
 
-// struct App {
-//     state: State,
-//     current: i32, // countdown time in milliseconds
-//     max: i32,     // start value of timer
-//     buttons: [Button; 5],
-//     prompt_buttons: [Button; 2],
-// }
+struct App {
+    state: State,
+    timer_current: i32, // countdown time in milliseconds
+    timer_max: i32,     // start value of timer
+    window_borders: bool,
+    muted: bool,
+}
 
-static TIMER: Mutex<Timer> = Mutex::new(Timer {
-    state: State::Running,
-    current: 0,
-    max: 0,
-});
-
-static BUTTONS: Mutex<Option<[Button; 5]>> = Mutex::new(None);
+static BUTTONS: Mutex<Option<[Button; 4]>> = Mutex::new(None);
 static PROMPT_BUTTONS: Mutex<Option<[Button; 2]>> = Mutex::new(None);
-static BORDERED: Mutex<bool> = Mutex::new(true); // window borders
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
@@ -112,14 +95,7 @@ pub fn main() {
     if timer_minutes > 100 {
         timer_minutes = 100;
     }
-
-    {
-        // set the timer
-        let mut timer = *TIMER.lock().unwrap();
-        timer.max = timer_minutes * 60 * 1000;
-        timer.current = timer.max;
-        *TIMER.lock().unwrap() = timer;
-    }
+    let timer_ms = timer_minutes * 60 * 1000;
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -149,50 +125,52 @@ pub fn main() {
     *BUTTONS.lock().unwrap() = Some(init_buttons());
     *PROMPT_BUTTONS.lock().unwrap() = Some(init_prompt_buttons());
 
+    let mut app = App {
+        state: State::Running,
+        timer_current: timer_ms,
+        timer_max: timer_ms,
+        window_borders: true,
+        muted: false,
+    };
+
     let mut ticks = 0;
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     loop {
-        let state = (*TIMER.lock().unwrap()).state;
-
-        if state == State::Exiting {
+        if app.state == State::Exiting {
             break;
         }
 
-        handle_events(&mut event_pump, &mut canvas);
+        handle_events(&mut event_pump, &mut app,&mut canvas);
 
         let last_ticks = ticks;
         ticks = timer_subsystem.ticks64();
         let elapsed_time = ticks - last_ticks;
 
-        if state == State::Running {
-            update(elapsed_time);
+        if app.state == State::Running {
+            update(elapsed_time,&mut app);
         }
 
-        draw(&mut canvas, &textures, &font);
+        draw(&mut app,&mut canvas, &textures, &font);
 
         std::thread::sleep(Duration::from_millis(16));
     }
 }
 
-fn handle_events(event_pump: &mut EventPump, canvas: &mut WindowCanvas) {
+fn handle_events(event_pump: &mut EventPump, app: &mut App,canvas: &mut WindowCanvas) {
     for event in event_pump.poll_iter() {
         match event {
             Event::Quit { .. } => {
-                let mut timer = *TIMER.lock().unwrap();
-                timer.state = State::Prompt(PromptType::Exit);
-                *TIMER.lock().unwrap() = timer;
+                app.state = State::Prompt(PromptType::Exit);
             }
             Event::KeyDown { keycode, .. } => match keycode {
                 Some(Keycode::Escape) => {
-                    let mut timer = *TIMER.lock().unwrap();
-                    match timer.state {
+                    match app.state {
                         // if in a prompt, cancel it
-                        State::Prompt(_) => timer.state = State::Paused,
+                        State::Prompt(_) => app.state = State::Paused,
                         // else, prompt to exit
-                        _ => timer.state = State::Prompt(PromptType::Exit),
+                        _ => app.state = State::Prompt(PromptType::Exit),
                     }
-                    *TIMER.lock().unwrap() = timer;
                 }
                 _ => {}
             },
@@ -200,10 +178,9 @@ fn handle_events(event_pump: &mut EventPump, canvas: &mut WindowCanvas) {
                 mouse_btn, x, y, ..
             } => {
                 if mouse_btn == mouse::MouseButton::Left {
-                    let timer = *TIMER.lock().unwrap();
-                    match timer.state {
-                        State::Prompt(_) => check_prompt_buttons(x, y),
-                        _ => check_buttons(x, y, canvas.window_mut()),
+                    match app.state {
+                        State::Prompt(_) => check_prompt_buttons(x, y,app),
+                        _ => check_buttons(x, y, app,canvas.window_mut()),
                     }
                 }
             }
@@ -211,22 +188,18 @@ fn handle_events(event_pump: &mut EventPump, canvas: &mut WindowCanvas) {
         }
     }
 }
-fn update(elapsed_time: u64) {
-    let mut timer = *TIMER.lock().unwrap();
-    timer.current -= elapsed_time as i32;
-    if timer.current <= 0 {
-        timer.current = 0;
-        timer.state = State::Done;
-        println!("Done!");
+
+fn update(elapsed_time: u64,app: &mut App) {
+    app.timer_current -= elapsed_time as i32;
+    if app.timer_current <= 0 {
+        app.timer_current = 0;
+        app.state = State::Done;
     }
-    *TIMER.lock().unwrap() = timer;
 }
 
-fn draw(canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>, font: &Font) {
-    let timer = *TIMER.lock().unwrap();
-
+fn draw(app: &mut App,canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>, font: &Font) {
     // clear the screen
-    let bg_color = if timer.state == State::Done {
+    let bg_color = if app.state == State::Done {
         Color::RGB(255, 100, 100) // Red when done
     } else {
         Color::RGB(200, 200, 255)
@@ -234,20 +207,20 @@ fn draw(canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>, font: &Fon
     canvas.set_draw_color(bg_color);
     canvas.clear();
 
-    match timer.state {
-        State::Prompt(_) => draw_prompt(canvas, font, &textures.get("buttons").unwrap()),
+    match app.state {
+        State::Prompt(_) => draw_prompt(app,canvas, font, &textures.get("buttons").unwrap()),
         _ => {
             // draw the timer
             let offset = 8;
             let mut x = offset;
             let y = offset;
-            let timer_str = timer_to_string(timer.current);
+            let timer_str = timer_to_string(app.timer_current);
             let texture = textures.get("chars").unwrap();
             for c in timer_str.chars() {
-                draw_char(canvas, texture, c, x, y);
+                draw_char(c, x, y,canvas, texture);
                 x += 32;
             }
-            draw_buttons(canvas, &textures.get("buttons").unwrap());
+            draw_buttons(app,canvas, &textures.get("buttons").unwrap());
         }
     }
 
@@ -274,13 +247,11 @@ fn timer_to_string(timer: i32) -> String {
     timer_str
 }
 
-fn init_buttons() -> [Button; 5] {
+fn init_buttons() -> [Button; 4] {
     let offset = 0;
     let mut x = WINDOW_WIDTH - 62 - offset;
     let y = WINDOW_HEIGHT - 24 - offset;
 
-    let settings = Button::new(ButtonType::Settings, x, y, 4, 0, 4, 0);
-    x = x - 24 - offset;
     let mute = Button::new(ButtonType::Mute, x, y, 4, 1, 3, 1);
     x = x - 24 - offset;
     let hide = Button::new(ButtonType::Hide, x, y, 6, 0, 5, 0);
@@ -288,7 +259,7 @@ fn init_buttons() -> [Button; 5] {
     let refresh = Button::new(ButtonType::Refresh, x, y, 3, 0, 3, 0);
     x = x - 24 - offset;
     let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
-    [settings, mute, hide, refresh, play]
+    [mute, hide, refresh, play]
 }
 
 fn init_prompt_buttons() -> [Button; 2] {
@@ -301,18 +272,17 @@ fn init_prompt_buttons() -> [Button; 2] {
     [ok, cancel]
 }
 
-fn check_buttons(x: i32, y: i32, window: &mut Window) {
+fn check_buttons(x: i32, y: i32, app: &mut App,window: &mut Window) {
     let p = Point::new(x, y);
     let buttons = BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
             if b.rect.contains_point(p) {
                 match b.name {
-                    ButtonType::Hide => on_hide_clicked(window),
-                    ButtonType::Refresh => on_refresh_clicked(),
-                    ButtonType::Play => on_play_clicked(),
-                    ButtonType::Settings => on_settings_clicked(),
-                    ButtonType::Mute => on_mute_clicked(),
+                    ButtonType::Hide => on_hide_clicked(app,window),
+                    ButtonType::Refresh => on_refresh_clicked(app),
+                    ButtonType::Play => on_play_clicked(app),
+                    ButtonType::Mute => on_mute_clicked(app),
                     _ => {}
                 }
                 return; // Early return after handling a button click
@@ -321,15 +291,15 @@ fn check_buttons(x: i32, y: i32, window: &mut Window) {
     }
 }
 
-fn check_prompt_buttons(x: i32, y: i32) {
+fn check_prompt_buttons(x: i32, y: i32,app: &mut App) {
     let p = Point::new(x, y);
     let buttons = PROMPT_BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
             if b.rect.contains_point(p) {
                 match b.name {
-                    ButtonType::Ok => on_ok_clicked(),
-                    ButtonType::Cancel => on_cancel_clicked(),
+                    ButtonType::Ok => on_ok_clicked(app),
+                    ButtonType::Cancel => on_cancel_clicked(app),
                     _ => {}
                 }
                 return; // Early return after handling a button click
@@ -338,85 +308,76 @@ fn check_prompt_buttons(x: i32, y: i32) {
     }
 }
 
-fn on_play_clicked() {
-    let mut timer = *TIMER.lock().unwrap();
-    match timer.state {
+fn on_play_clicked(app: &mut App) {
+    match app.state {
         State::Paused => {
-            timer.state = State::Running;
-            *TIMER.lock().unwrap() = timer;
+            app.state = State::Running;
         }
         State::Running => {
-            timer.state = State::Paused;
-            *TIMER.lock().unwrap() = timer;
+            app.state = State::Paused;
         }
         _ => {}
     }
 }
 
-fn on_refresh_clicked() {
-    let mut timer = *TIMER.lock().unwrap();
-    timer.state = State::Prompt(PromptType::Reset);
-    *TIMER.lock().unwrap() = timer;
+fn on_refresh_clicked(app: &mut App) {
+    app.state = State::Prompt(PromptType::Reset);
 }
 
-fn on_hide_clicked(window: &mut Window) {
-    let bordered = !(*BORDERED.lock().unwrap());
-    window.set_bordered(bordered);
-    *BORDERED.lock().unwrap() = bordered;
+fn on_hide_clicked(app: &mut App,window: &mut Window) {
+    app.window_borders = !app.window_borders;
+    window.set_bordered(app.window_borders);
 }
 
-fn on_settings_clicked() {
-    println!("settings clicked");
-}
-
-fn on_mute_clicked() {
+fn on_mute_clicked(app: &mut App) {
+    app.muted = !app.muted;
     println!("Mute clicked");
 }
 
-fn on_ok_clicked() {
-    let mut timer = *TIMER.lock().unwrap();
-    match timer.state {
+fn on_ok_clicked(app: &mut App) {
+    match app.state {
         State::Prompt(prompt_type) => {
             if prompt_type == PromptType::Reset {
                 // reset the timer
-                timer.current = timer.max;
-                timer.state = State::Paused;
+                app.timer_current = app.timer_max;
+                app.state = State::Paused;
             } else if prompt_type == PromptType::Exit {
                 // exit the app
-                timer.state = State::Exiting;
+                app.state = State::Exiting;
             }
         }
         _ => {}
     }
-    *TIMER.lock().unwrap() = timer;
 }
 
-fn on_cancel_clicked() {
-    let mut timer = *TIMER.lock().unwrap();
-    match timer.state {
+fn on_cancel_clicked(app: &mut App) {
+    match app.state {
         State::Prompt(_) => {
             // cancel the prompt
-            timer.state = State::Paused;
+            app.state = State::Paused;
         }
         _ => {}
     }
-    *TIMER.lock().unwrap() = timer;
 }
 
-fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
-    let timer = *TIMER.lock().unwrap();
+fn draw_buttons(app: &mut App,canvas: &mut WindowCanvas, button_texture: &Texture) {
     let buttons = BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
             let mut src_rect = b.texture_rect;
             match b.name {
                 ButtonType::Play => {
-                    if timer.state == State::Paused {
+                    if app.state == State::Paused {
                         src_rect = b.texture_rect_alt;
                     }
                 }
                 ButtonType::Hide => {
-                    if !(*BORDERED.lock().unwrap()) {
+                    if !app.window_borders {
+                        src_rect = b.texture_rect_alt;
+                    }
+                }
+                ButtonType::Mute => {
+                    if !app.muted {
                         src_rect = b.texture_rect_alt;
                     }
                 }
@@ -427,7 +388,7 @@ fn draw_buttons(canvas: &mut WindowCanvas, button_texture: &Texture) {
     }
 }
 
-fn draw_char(canvas: &mut WindowCanvas, char_texture: &Texture, c: char, x: i32, y: i32) {
+fn draw_char(c: char, x: i32, y: i32,canvas: &mut WindowCanvas, char_texture: &Texture) {
     let src_rect = char_rect(c);
     let dst_rect = Rect::new(x, y, 32, 32);
     canvas.copy(&char_texture, src_rect, dst_rect).unwrap();
@@ -441,14 +402,13 @@ fn char_rect(c: char) -> Rect {
     Rect::new(x, y, 64, 64)
 }
 
-fn draw_prompt(canvas: &mut WindowCanvas, font: &Font, button_texture: &Texture) {
-    let timer = *TIMER.lock().unwrap();
-    let message = match timer.state {
+fn draw_prompt(app: &mut App,canvas: &mut WindowCanvas, font: &Font, button_texture: &Texture) {
+    let message = match app.state {
         State::Prompt(PromptType::Reset) => "Reset Timer?",
         State::Prompt(PromptType::Exit) => "Exit?",
         _ => "",
     };
-    draw_text(canvas, font, message, WINDOW_WIDTH / 4, 10);
+    draw_text( message, WINDOW_WIDTH / 4, 10,canvas, font);
     let buttons = PROMPT_BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
@@ -459,7 +419,7 @@ fn draw_prompt(canvas: &mut WindowCanvas, font: &Font, button_texture: &Texture)
     }
 }
 
-fn draw_text(canvas: &mut WindowCanvas, font: &Font, text: &str, x: i32, y: i32) -> Rect {
+fn draw_text(text: &str, x: i32, y: i32,canvas: &mut WindowCanvas, font: &Font) -> Rect {
     // render the text to a surface
     let surface = font.render(text).blended(Color::RGB(0, 0, 0)).unwrap();
     // convert the surface to a texture
