@@ -175,7 +175,10 @@ fn handle_events(event_pump: &mut EventPump, app: &mut App, canvas: &mut WindowC
             Event::Quit { .. } => {
                 app.state = State::Prompt(PromptType::Exit);
             }
-            Event::KeyDown { keycode: Some(keycode), .. } => { 
+            Event::KeyDown {
+                keycode: Some(keycode),
+                ..
+            } => {
                 match keycode {
                     Keycode::Escape => {
                         match app.state {
@@ -190,7 +193,7 @@ fn handle_events(event_pump: &mut EventPump, app: &mut App, canvas: &mut WindowC
                     }
                     _ => {}
                 }
-            },
+            }
             Event::MouseButtonDown {
                 mouse_btn, x, y, ..
             } => {
@@ -265,26 +268,23 @@ fn timer_to_string(timer: i32) -> String {
 }
 
 fn init_buttons() -> [Button; 4] {
-    let offset = 0;
-    let mut x = WINDOW_WIDTH - 62 - offset;
-    let y = WINDOW_HEIGHT - 24 - offset;
-
+    let mut x = WINDOW_WIDTH - 24;
+    let y = WINDOW_HEIGHT - 24;
     let mute = Button::new(ButtonType::Mute, x, y, 4, 1, 3, 1);
-    x = x - 24 - offset;
+    x -= 24;
     let hide = Button::new(ButtonType::Hide, x, y, 6, 0, 5, 0);
-    x = x - 24 - offset;
+    x -= 24;
     let refresh = Button::new(ButtonType::Refresh, x, y, 3, 0, 3, 0);
-    x = x - 24 - offset;
+    x -= 24;
     let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
     [mute, hide, refresh, play]
 }
 
 fn init_prompt_buttons() -> [Button; 2] {
-    let offset = 0;
     let mut x = WINDOW_WIDTH / 4;
     let y = WINDOW_HEIGHT / 2;
     let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
-    x = x + 64 + offset;
+    x = x + 64;
     let cancel = Button::new(ButtonType::Cancel, x, y, 6, 1, 6, 1);
     [ok, cancel]
 }
