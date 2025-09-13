@@ -53,9 +53,9 @@ enum ButtonType {
     Refresh,
     Hide,
     Mute,
+    Exit,
     Ok,
     Cancel,
-    Exit,
 }
 
 struct Button {
@@ -63,6 +63,7 @@ struct Button {
     rect: Rect,             // position on the screen
     texture_rect: Rect,     // position in the texture
     texture_rect_alt: Rect, // position in the texture of the alternate icon (ex: play/pause)
+    pressed: bool,
 }
 
 impl Button {
@@ -83,6 +84,7 @@ impl Button {
             rect,
             texture_rect,
             texture_rect_alt,
+            pressed: false,
         }
     }
 }
@@ -200,8 +202,18 @@ fn handle_events(event_pump: &mut EventPump, app: &mut App, canvas: &mut WindowC
             } => {
                 if mouse_btn == mouse::MouseButton::Left {
                     match app.state {
-                        State::Prompt(_) => check_prompt_buttons(x, y, app),
-                        _ => check_buttons(x, y, app, canvas.window_mut()),
+                        State::Prompt(_) => check_prompt_buttons(x, y, app, true),
+                        _ => check_buttons(x, y, app, canvas.window_mut(), true),
+                    }
+                }
+            }
+            Event::MouseButtonUp {
+                mouse_btn, x, y, ..
+            } => {
+                if mouse_btn == mouse::MouseButton::Left {
+                    match app.state {
+                        State::Prompt(_) => check_prompt_buttons(x, y, app, false),
+                        _ => check_buttons(x, y, app, canvas.window_mut(), false),
                     }
                 }
             }
@@ -292,38 +304,51 @@ fn init_prompt_buttons() -> [Button; 2] {
     [ok, cancel]
 }
 
-fn check_buttons(x: i32, y: i32, app: &mut App, window: &mut Window) {
+fn check_buttons(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
     let p = Point::new(x, y);
-    let buttons = BUTTONS.lock().unwrap();
-    if let Some(buttons) = buttons.as_ref() {
-        for b in buttons.iter() {
+    let mut buttons = BUTTONS.lock().unwrap();
+    if let Some(buttons) = buttons.as_mut() {
+        for b in buttons.iter_mut() {
+            b.pressed = false;
             if b.rect.contains_point(p) {
-                match b.name {
-                    ButtonType::Hide => on_hide_clicked(app, window),
-                    ButtonType::Refresh => on_refresh_clicked(app),
-                    ButtonType::Play => on_play_clicked(app),
-                    ButtonType::Mute => on_mute_clicked(app),
-                    ButtonType::Exit => on_exit_clicked(app),
-                    _ => {}
+                if down {
+                    b.pressed = true;
+                } else {
+                    // mouse button released
+                    match b.name {
+                        ButtonType::Hide => on_hide_clicked(app, window),
+                        ButtonType::Refresh => on_refresh_clicked(app),
+                        ButtonType::Play => on_play_clicked(app),
+                        ButtonType::Mute => on_mute_clicked(app),
+                        ButtonType::Exit => on_exit_clicked(app),
+                        ButtonType::Ok | ButtonType::Cancel => {} // not in buttons array
+                    }
+                    return;
                 }
-                return;
             }
         }
     }
 }
 
-fn check_prompt_buttons(x: i32, y: i32, app: &mut App) {
+fn check_prompt_buttons(x: i32, y: i32, app: &mut App, down: bool) {
     let p = Point::new(x, y);
-    let buttons = PROMPT_BUTTONS.lock().unwrap();
-    if let Some(buttons) = buttons.as_ref() {
-        for b in buttons.iter() {
+    let mut buttons = PROMPT_BUTTONS.lock().unwrap();
+    if let Some(buttons) = buttons.as_mut() {
+        for b in buttons.iter_mut() {
+            b.pressed = false;
             if b.rect.contains_point(p) {
-                match b.name {
-                    ButtonType::Ok => on_ok_clicked(app),
-                    ButtonType::Cancel => on_cancel_clicked(app),
-                    _ => {}
+                b.pressed = down;
+                if down {
+                    b.pressed = true;
+                } else {
+                    // mouse button released
+                    match b.name {
+                        ButtonType::Ok => on_ok_clicked(app),
+                        ButtonType::Cancel => on_cancel_clicked(app),
+                        _ => {} // only Ok and Cancel in the array
+                    }
+                    return;
                 }
-                return;
             }
         }
     }
@@ -408,7 +433,16 @@ fn draw_buttons(app: &mut App, canvas: &mut WindowCanvas, button_texture: &Textu
                 }
                 _ => {}
             }
-            canvas.copy(&button_texture, src_rect, b.rect).unwrap();
+
+            let mut dst_rect = b.rect;
+
+            // offset the image if the button is pressed
+            if b.pressed {
+                dst_rect.x += 1;
+                dst_rect.y += 1;
+            }
+
+            canvas.copy(&button_texture, src_rect, dst_rect).unwrap();
         }
     }
 }
@@ -437,8 +471,14 @@ fn draw_prompt(app: &mut App, canvas: &mut WindowCanvas, font: &Font, button_tex
     let buttons = PROMPT_BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
+            let mut dst_rect = b.rect;
+            // offset the image if the button is pressed
+            if b.pressed {
+                dst_rect.x += 1;
+                dst_rect.y += 1;
+            }
             canvas
-                .copy(&button_texture, b.texture_rect, b.rect)
+                .copy(&button_texture, b.texture_rect, dst_rect)
                 .unwrap();
         }
     }
