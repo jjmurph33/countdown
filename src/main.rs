@@ -15,6 +15,7 @@ use sdl2::ttf::Font;
 use sdl2::video::{Window, WindowPos};
 use sdl2::{EventPump, mouse};
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -101,22 +102,37 @@ static BUTTONS: Mutex<Option<[Button; 5]>> = Mutex::new(None);
 static PROMPT_BUTTONS: Mutex<Option<[Button; 2]>> = Mutex::new(None);
 
 pub fn main() {
+    if let Err(e) = run() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let timer_ms = args.minutes * 60 * 1000;
 
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let timer_subsystem = sdl_context.timer().unwrap();
-    let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG).unwrap();
+    let sdl_context = sdl2::init().map_err(|e| format!("Failed to initialize SDL2: {}", e))?;
+    let video_subsystem = sdl_context
+        .video()
+        .map_err(|e| format!("Failed to initialize video subsystem: {}", e))?;
+    let timer_subsystem = sdl_context
+        .timer()
+        .map_err(|e| format!("Failed to initialize timer subsystem: {}", e))?;
+    let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG)
+        .map_err(|e| format!("Failed to initialize image context: {}", e))?;
 
-    let ttf_context = sdl2::ttf::init().unwrap();
-    let font = ttf_context.load_font("res/font.ttf", 16).unwrap();
+    let ttf_context =
+        sdl2::ttf::init().map_err(|e| format!("Failed to initialize TTF context: {}", e))?;
+    let font = ttf_context
+        .load_font("res/font.ttf", 16)
+        .map_err(|e| format!("Failed to load font 'res/font.ttf': {}", e))?;
 
     let mut window = video_subsystem
         .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
         .position_centered()
         .build()
-        .unwrap();
+        .map_err(|e| format!("Failed to create window: {}", e))?;
 
     if args.x != 0 && args.y != 0 {
         window.set_position(WindowPos::Positioned(args.x), WindowPos::Positioned(args.y));
@@ -126,14 +142,21 @@ pub fn main() {
         window.set_bordered(false);
     }
 
-    let mut canvas = window.into_canvas().build().unwrap();
+    let mut canvas = window
+        .into_canvas()
+        .build()
+        .map_err(|e| format!("Failed to create canvas: {}", e))?;
     let texture_creator = canvas.texture_creator();
 
     // load the textures
     let mut textures = HashMap::new();
-    let texture = texture_creator.load_texture("res/chars.png").unwrap();
+    let texture = texture_creator
+        .load_texture("res/chars.png")
+        .map_err(|e| format!("Failed to load texture 'res/chars.png': {}", e))?;
     textures.insert("chars", texture);
-    let texture = texture_creator.load_texture("res/buttons.png").unwrap();
+    let texture = texture_creator
+        .load_texture("res/buttons.png")
+        .map_err(|e| format!("Failed to load texture 'res/buttons.png': {}", e))?;
     textures.insert("buttons", texture);
 
     // create the buttons
@@ -150,9 +173,11 @@ pub fn main() {
 
     let mut ticks = 0;
 
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut event_pump = sdl_context
+        .event_pump()
+        .map_err(|e| format!("Failed to get event pump: {}", e))?;
     loop {
-        handle_events(&mut event_pump, &mut app, &mut canvas);
+        handle_events(&mut event_pump, &mut app, &mut canvas)?;
 
         if app.state == State::Exiting {
             break;
@@ -166,13 +191,19 @@ pub fn main() {
             update(elapsed_time, &mut app);
         }
 
-        draw(&mut app, &mut canvas, &textures, &font);
+        draw(&mut app, &mut canvas, &textures, &font)?;
 
         std::thread::sleep(Duration::from_millis(16));
     }
+
+    Ok(())
 }
 
-fn handle_events(event_pump: &mut EventPump, app: &mut App, canvas: &mut WindowCanvas) {
+fn handle_events(
+    event_pump: &mut EventPump,
+    app: &mut App,
+    canvas: &mut WindowCanvas,
+) -> Result<(), Box<dyn Error>> {
     for event in event_pump.poll_iter() {
         match event {
             Event::Quit { .. } => {
@@ -220,6 +251,7 @@ fn handle_events(event_pump: &mut EventPump, app: &mut App, canvas: &mut WindowC
             _ => {}
         }
     }
+    Ok(())
 }
 
 fn update(elapsed_time: u64, app: &mut App) {
@@ -230,7 +262,12 @@ fn update(elapsed_time: u64, app: &mut App) {
     }
 }
 
-fn draw(app: &mut App, canvas: &mut WindowCanvas, textures: &HashMap<&str, Texture>, font: &Font) {
+fn draw(
+    app: &mut App,
+    canvas: &mut WindowCanvas,
+    textures: &HashMap<&str, Texture>,
+    font: &Font,
+) -> Result<(), Box<dyn Error>> {
     // clear the screen
     let bg_color = if app.state == State::Done {
         Color::RGB(255, 100, 100) // Red when done
@@ -241,7 +278,7 @@ fn draw(app: &mut App, canvas: &mut WindowCanvas, textures: &HashMap<&str, Textu
     canvas.clear();
 
     match app.state {
-        State::Prompt(_) => draw_prompt(app, canvas, font, &textures.get("buttons").unwrap()),
+        State::Prompt(_) => draw_prompt(app, canvas, font, &textures.get("buttons").unwrap())?,
         _ => {
             // draw the timer
             let offset = 8;
@@ -250,14 +287,15 @@ fn draw(app: &mut App, canvas: &mut WindowCanvas, textures: &HashMap<&str, Textu
             let timer_str = timer_to_string(app.timer_current);
             let texture = textures.get("chars").unwrap();
             for c in timer_str.chars() {
-                draw_char(c, x, y, canvas, texture);
+                draw_char(c, x, y, canvas, texture)?;
                 x += 32;
             }
-            draw_buttons(app, canvas, &textures.get("buttons").unwrap());
+            draw_buttons(app, canvas, &textures.get("buttons").unwrap())?;
         }
     }
 
     canvas.present();
+    Ok(())
 }
 
 fn timer_to_string(timer: i32) -> String {
@@ -410,7 +448,11 @@ fn on_cancel_clicked(app: &mut App) {
     }
 }
 
-fn draw_buttons(app: &mut App, canvas: &mut WindowCanvas, button_texture: &Texture) {
+fn draw_buttons(
+    app: &mut App,
+    canvas: &mut WindowCanvas,
+    button_texture: &Texture,
+) -> Result<(), Box<dyn Error>> {
     let buttons = BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
@@ -442,15 +484,26 @@ fn draw_buttons(app: &mut App, canvas: &mut WindowCanvas, button_texture: &Textu
                 dst_rect.y += 1;
             }
 
-            canvas.copy(&button_texture, src_rect, dst_rect).unwrap();
+            canvas
+                .copy(&button_texture, src_rect, dst_rect)
+                .map_err(|e| format!("Failed to copy button texture: {}", e))?;
         }
     }
+    Ok(())
 }
 
-fn draw_char(c: char, x: i32, y: i32, canvas: &mut WindowCanvas, char_texture: &Texture) {
+fn draw_char(
+    c: char,
+    x: i32,
+    y: i32,
+    canvas: &mut WindowCanvas,
+    char_texture: &Texture,
+) -> Result<(), Box<dyn Error>> {
     let src_rect = char_rect(c);
     let dst_rect = Rect::new(x, y, 32, 32);
-    canvas.copy(&char_texture, src_rect, dst_rect).unwrap();
+    canvas
+        .copy(&char_texture, src_rect, dst_rect)
+        .map_err(|e| format!("Failed to copy char texture: {}", e).into())
 }
 
 fn char_rect(c: char) -> Rect {
@@ -461,13 +514,18 @@ fn char_rect(c: char) -> Rect {
     Rect::new(x, y, 64, 64)
 }
 
-fn draw_prompt(app: &mut App, canvas: &mut WindowCanvas, font: &Font, button_texture: &Texture) {
+fn draw_prompt(
+    app: &mut App,
+    canvas: &mut WindowCanvas,
+    font: &Font,
+    button_texture: &Texture,
+) -> Result<(), Box<dyn Error>> {
     let message = match app.state {
         State::Prompt(PromptType::Reset) => "Reset Timer?",
         State::Prompt(PromptType::Exit) => "Exit?",
         _ => "",
     };
-    draw_text(message, WINDOW_WIDTH / 4, 10, canvas, font);
+    draw_text(message, WINDOW_WIDTH / 4, 10, canvas, font)?;
     let buttons = PROMPT_BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
@@ -479,23 +537,35 @@ fn draw_prompt(app: &mut App, canvas: &mut WindowCanvas, font: &Font, button_tex
             }
             canvas
                 .copy(&button_texture, b.texture_rect, dst_rect)
-                .unwrap();
+                .map_err(|e| format!("Failed to copy button texture: {}", e))?;
         }
     }
+    Ok(())
 }
 
-fn draw_text(text: &str, x: i32, y: i32, canvas: &mut WindowCanvas, font: &Font) -> Rect {
+fn draw_text(
+    text: &str,
+    x: i32,
+    y: i32,
+    canvas: &mut WindowCanvas,
+    font: &Font,
+) -> Result<Rect, Box<dyn Error>> {
     // render the text to a surface
-    let surface = font.render(text).blended(Color::RGB(0, 0, 0)).unwrap();
+    let surface = font
+        .render(text)
+        .blended(Color::RGB(0, 0, 0))
+        .map_err(|e| format!("Failed to render text: {}", e))?;
     // convert the surface to a texture
     let texture_creator = canvas.texture_creator();
     let texture = texture_creator
         .create_texture_from_surface(&surface)
-        .unwrap();
+        .map_err(|e| format!("Failed to create texture from surface: {}", e))?;
     // get the size of the texture
     let TextureQuery { width, height, .. } = texture.query();
     let target_rect = Rect::new(x, y, width, height);
     // copy the texture to the canvas
-    canvas.copy(&texture, None, target_rect).unwrap();
-    target_rect
+    canvas
+        .copy(&texture, None, target_rect)
+        .map_err(|e| format!("Failed to copy text texture: {}", e))?;
+    Ok(target_rect)
 }

@@ -10,4 +10,3 @@ clap = {version = "4.5.47",features = ["derive"]}
 version = "0.38"
 default-features = false
 features = ["image","ttf"]
-
