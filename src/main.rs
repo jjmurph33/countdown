@@ -1,6 +1,8 @@
 // hide console on Windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod buttons;
+
 extern crate sdl2;
 
 use clap::Parser;
@@ -8,15 +10,13 @@ use sdl2::event::Event;
 use sdl2::image::LoadTexture;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::rect::{Point, Rect};
-use sdl2::render::TextureQuery;
-use sdl2::render::{Texture, WindowCanvas};
+use sdl2::rect::Rect;
+use sdl2::render::{Texture, TextureQuery, WindowCanvas};
 use sdl2::ttf::Font;
-use sdl2::video::{Window, WindowPos};
+use sdl2::video::WindowPos;
 use sdl2::{EventPump, mouse};
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Mutex;
 use std::time::Duration;
 
 const WINDOW_WIDTH: i32 = 185;
@@ -35,13 +35,13 @@ struct Args {
 }
 
 #[derive(PartialEq, Clone, Copy)]
-enum PromptType {
+pub enum PromptType {
     Reset,
     Exit,
 }
 
 #[derive(PartialEq, Clone, Copy)]
-enum State {
+pub enum State {
     Running,
     Paused,
     Done,
@@ -49,57 +49,13 @@ enum State {
     Exiting,
 }
 
-enum ButtonType {
-    Play,
-    Refresh,
-    Hide,
-    Mute,
-    Exit,
-    Ok,
-    Cancel,
+pub struct App {
+    pub state: State,
+    pub timer_current: i32, // countdown time in milliseconds
+    pub timer_max: i32,     // start value of timer
+    pub window_borders: bool,
+    pub muted: bool,
 }
-
-struct Button {
-    name: ButtonType,
-    rect: Rect,             // position on the screen
-    texture_rect: Rect,     // position in the texture
-    texture_rect_alt: Rect, // position in the texture of the alternate icon (ex: play/pause)
-    pressed: bool,
-}
-
-impl Button {
-    fn new(
-        name: ButtonType,
-        screen_x: i32,
-        screen_y: i32,
-        x_offset: i32,
-        y_offset: i32,
-        alt_x_offset: i32,
-        alt_y_offset: i32,
-    ) -> Self {
-        let rect = Rect::new(screen_x, screen_y, 24, 24);
-        let texture_rect = Rect::new(64 * x_offset, 64 * y_offset, 64, 64);
-        let texture_rect_alt = Rect::new(64 * alt_x_offset, 64 * alt_y_offset, 64, 64);
-        Button {
-            name,
-            rect,
-            texture_rect,
-            texture_rect_alt,
-            pressed: false,
-        }
-    }
-}
-
-struct App {
-    state: State,
-    timer_current: i32, // countdown time in milliseconds
-    timer_max: i32,     // start value of timer
-    window_borders: bool,
-    muted: bool,
-}
-
-static BUTTONS: Mutex<Option<[Button; 5]>> = Mutex::new(None);
-static PROMPT_BUTTONS: Mutex<Option<[Button; 2]>> = Mutex::new(None);
 
 pub fn main() {
     if let Err(e) = run() {
@@ -112,6 +68,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let timer_ms = args.minutes * 60 * 1000;
 
+    // SDL initialization
     let sdl_context = sdl2::init().map_err(|e| format!("Failed to initialize SDL2: {}", e))?;
     let video_subsystem = sdl_context
         .video()
@@ -122,26 +79,29 @@ fn run() -> Result<(), Box<dyn Error>> {
     let _image_context = sdl2::image::init(sdl2::image::InitFlag::PNG)
         .map_err(|e| format!("Failed to initialize image context: {}", e))?;
 
+    // font initialization
     let ttf_context =
         sdl2::ttf::init().map_err(|e| format!("Failed to initialize TTF context: {}", e))?;
     let font = ttf_context
         .load_font("res/font.ttf", 16)
         .map_err(|e| format!("Failed to load font 'res/font.ttf': {}", e))?;
 
+    // create the window
     let mut window = video_subsystem
         .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
         .position_centered()
         .build()
         .map_err(|e| format!("Failed to create window: {}", e))?;
 
+    // adjust the window based on args
     if args.x != 0 && args.y != 0 {
         window.set_position(WindowPos::Positioned(args.x), WindowPos::Positioned(args.y));
     }
-
     if args.hide_borders {
         window.set_bordered(false);
     }
 
+    // create the canvas
     let mut canvas = window
         .into_canvas()
         .build()
@@ -150,8 +110,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // load the textures
     let mut textures = HashMap::new();
-    let texture = texture_creator
-        .load_texture("res/chars.png")
+    let texture = texture_creator.load_texture("res/chars.png")
         .map_err(|e| format!("Failed to load texture 'res/chars.png': {}", e))?;
     textures.insert("chars", texture);
     let texture = texture_creator
@@ -160,8 +119,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     textures.insert("buttons", texture);
 
     // create the buttons
-    *BUTTONS.lock().unwrap() = Some(init_buttons());
-    *PROMPT_BUTTONS.lock().unwrap() = Some(init_prompt_buttons());
+    buttons::init(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     let mut app = App {
         state: State::Running,
@@ -176,6 +134,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut event_pump = sdl_context
         .event_pump()
         .map_err(|e| format!("Failed to get event pump: {}", e))?;
+
     loop {
         handle_events(&mut event_pump, &mut app, &mut canvas)?;
 
@@ -223,7 +182,7 @@ fn handle_events(
                         }
                     }
                     Keycode::Return | Keycode::KpEnter => {
-                        on_ok_clicked(app);
+                        buttons::click_ok(app);
                     }
                     _ => {}
                 }
@@ -233,8 +192,8 @@ fn handle_events(
             } => {
                 if mouse_btn == mouse::MouseButton::Left {
                     match app.state {
-                        State::Prompt(_) => check_prompt_buttons(x, y, app, true),
-                        _ => check_buttons(x, y, app, canvas.window_mut(), true),
+                        State::Prompt(_) => buttons::check_prompt(x, y, app, true),
+                        _ => buttons::check(x, y, app, canvas.window_mut(), true),
                     }
                 }
             }
@@ -243,8 +202,8 @@ fn handle_events(
             } => {
                 if mouse_btn == mouse::MouseButton::Left {
                     match app.state {
-                        State::Prompt(_) => check_prompt_buttons(x, y, app, false),
-                        _ => check_buttons(x, y, app, canvas.window_mut(), false),
+                        State::Prompt(_) => buttons::check_prompt(x, y, app, false),
+                        _ => buttons::check(x, y, app, canvas.window_mut(), false),
                     }
                 }
             }
@@ -263,7 +222,7 @@ fn update(elapsed_time: u64, app: &mut App) {
 }
 
 fn draw(
-    app: &mut App,
+    app: &App,
     canvas: &mut WindowCanvas,
     textures: &HashMap<&str, Texture>,
     font: &Font,
@@ -290,10 +249,9 @@ fn draw(
                 draw_char(c, x, y, canvas, texture)?;
                 x += 32;
             }
-            draw_buttons(app, canvas, &textures.get("buttons").unwrap())?;
+            buttons::draw(app, canvas, &textures.get("buttons").unwrap())?;
         }
     }
-
     canvas.present();
     Ok(())
 }
@@ -316,180 +274,6 @@ fn timer_to_string(timer: i32) -> String {
     timer_str.push_str(":");
     timer_str.push_str(&secs);
     timer_str
-}
-
-fn init_buttons() -> [Button; 5] {
-    let mut x = WINDOW_WIDTH - 24;
-    let y = WINDOW_HEIGHT - 24;
-    let exit = Button::new(ButtonType::Exit, x, y, 6, 1, 6, 1);
-    x -= 24;
-    let mute = Button::new(ButtonType::Mute, x, y, 4, 1, 3, 1);
-    x -= 24;
-    let hide = Button::new(ButtonType::Hide, x, y, 6, 0, 5, 0);
-    x -= 24;
-    let refresh = Button::new(ButtonType::Refresh, x, y, 3, 0, 3, 0);
-    x -= 24;
-    let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
-    [exit, mute, hide, refresh, play]
-}
-
-fn init_prompt_buttons() -> [Button; 2] {
-    let mut x = WINDOW_WIDTH / 4;
-    let y = WINDOW_HEIGHT / 2;
-    let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
-    x = x + 64;
-    let cancel = Button::new(ButtonType::Cancel, x, y, 6, 1, 6, 1);
-    [ok, cancel]
-}
-
-fn check_buttons(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
-    let p = Point::new(x, y);
-    let mut buttons = BUTTONS.lock().unwrap();
-    if let Some(buttons) = buttons.as_mut() {
-        for b in buttons.iter_mut() {
-            b.pressed = false;
-            if b.rect.contains_point(p) {
-                if down {
-                    b.pressed = true;
-                } else {
-                    // mouse button released
-                    match b.name {
-                        ButtonType::Hide => on_hide_clicked(app, window),
-                        ButtonType::Refresh => on_refresh_clicked(app),
-                        ButtonType::Play => on_play_clicked(app),
-                        ButtonType::Mute => on_mute_clicked(app),
-                        ButtonType::Exit => on_exit_clicked(app),
-                        ButtonType::Ok | ButtonType::Cancel => {} // not in buttons array
-                    }
-                    return;
-                }
-            }
-        }
-    }
-}
-
-fn check_prompt_buttons(x: i32, y: i32, app: &mut App, down: bool) {
-    let p = Point::new(x, y);
-    let mut buttons = PROMPT_BUTTONS.lock().unwrap();
-    if let Some(buttons) = buttons.as_mut() {
-        for b in buttons.iter_mut() {
-            b.pressed = false;
-            if b.rect.contains_point(p) {
-                b.pressed = down;
-                if down {
-                    b.pressed = true;
-                } else {
-                    // mouse button released
-                    match b.name {
-                        ButtonType::Ok => on_ok_clicked(app),
-                        ButtonType::Cancel => on_cancel_clicked(app),
-                        _ => {} // only Ok and Cancel in the array
-                    }
-                    return;
-                }
-            }
-        }
-    }
-}
-
-fn on_play_clicked(app: &mut App) {
-    match app.state {
-        State::Paused => {
-            app.state = State::Running;
-        }
-        State::Running => {
-            app.state = State::Paused;
-        }
-        _ => {}
-    }
-}
-
-fn on_refresh_clicked(app: &mut App) {
-    app.state = State::Prompt(PromptType::Reset);
-}
-
-fn on_hide_clicked(app: &mut App, window: &mut Window) {
-    app.window_borders = !app.window_borders;
-    window.set_bordered(app.window_borders);
-}
-
-fn on_mute_clicked(app: &mut App) {
-    app.muted = !app.muted;
-    println!("Mute clicked");
-}
-
-fn on_exit_clicked(app: &mut App) {
-    app.state = State::Prompt(PromptType::Exit);
-}
-
-fn on_ok_clicked(app: &mut App) {
-    match app.state {
-        State::Prompt(prompt_type) => {
-            if prompt_type == PromptType::Reset {
-                // reset the timer
-                app.timer_current = app.timer_max;
-                app.state = State::Paused;
-            } else if prompt_type == PromptType::Exit {
-                // exit the app
-                app.state = State::Exiting;
-            }
-        }
-        _ => {}
-    }
-}
-
-fn on_cancel_clicked(app: &mut App) {
-    match app.state {
-        State::Prompt(_) => {
-            // cancel the prompt
-            app.state = State::Paused;
-        }
-        _ => {}
-    }
-}
-
-fn draw_buttons(
-    app: &mut App,
-    canvas: &mut WindowCanvas,
-    button_texture: &Texture,
-) -> Result<(), Box<dyn Error>> {
-    let buttons = BUTTONS.lock().unwrap();
-    if let Some(buttons) = buttons.as_ref() {
-        for b in buttons.iter() {
-            let mut src_rect = b.texture_rect;
-            match b.name {
-                ButtonType::Play => {
-                    if app.state == State::Paused {
-                        src_rect = b.texture_rect_alt;
-                    }
-                }
-                ButtonType::Hide => {
-                    if !app.window_borders {
-                        src_rect = b.texture_rect_alt;
-                    }
-                }
-                ButtonType::Mute => {
-                    if !app.muted {
-                        src_rect = b.texture_rect_alt;
-                    }
-                }
-                _ => {}
-            }
-
-            let mut dst_rect = b.rect;
-
-            // offset the image if the button is pressed
-            if b.pressed {
-                dst_rect.x += 1;
-                dst_rect.y += 1;
-            }
-
-            canvas
-                .copy(&button_texture, src_rect, dst_rect)
-                .map_err(|e| format!("Failed to copy button texture: {}", e))?;
-        }
-    }
-    Ok(())
 }
 
 fn draw_char(
@@ -515,7 +299,7 @@ fn char_rect(c: char) -> Rect {
 }
 
 fn draw_prompt(
-    app: &mut App,
+    app: &App,
     canvas: &mut WindowCanvas,
     font: &Font,
     button_texture: &Texture,
@@ -526,7 +310,7 @@ fn draw_prompt(
         _ => "",
     };
     draw_text(message, WINDOW_WIDTH / 4, 10, canvas, font)?;
-    let buttons = PROMPT_BUTTONS.lock().unwrap();
+    let buttons = buttons::PROMPT_BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
             let mut dst_rect = b.rect;
