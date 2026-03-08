@@ -110,7 +110,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // load the textures
     let mut textures = HashMap::new();
-    let texture = texture_creator.load_texture("res/chars.png")
+    let texture = texture_creator
+        .load_texture("res/chars.png")
         .map_err(|e| format!("Failed to load texture 'res/chars.png': {}", e))?;
     textures.insert("chars", texture);
     let texture = texture_creator

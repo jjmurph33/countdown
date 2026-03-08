@@ -3,7 +3,7 @@ use sdl2::render::Texture;
 use sdl2::video::Window;
 use std::sync::Mutex;
 
-use crate::{App,State,PromptType};
+use crate::{App, PromptType, State};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ButtonType {
@@ -189,6 +189,8 @@ fn click_hide(app: &mut App, window: &mut Window) {
 
 fn click_mute(app: &mut App) {
     app.muted = !app.muted;
+    //TODO: mute the audio
+    //TODO: add sounds
     println!("Mute clicked");
 }
 
