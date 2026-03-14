@@ -7,11 +7,12 @@ extern crate sdl2;
 
 use clap::Parser;
 use sdl2::event::Event;
-use sdl2::image::LoadTexture;
+use sdl2::image::{LoadSurface, LoadTexture};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureQuery, WindowCanvas};
+use sdl2::surface::Surface;
 use sdl2::ttf::Font;
 use sdl2::video::WindowPos;
 use sdl2::{EventPump, mouse};
@@ -88,11 +89,16 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // create the window
     let mut window = video_subsystem
-        .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
+        .window("Countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
         .hidden()
         .position_centered()
         .build()
         .map_err(|e| format!("Failed to create window: {}", e))?;
+
+    // set window icon
+    let icon_surface = Surface::from_file("res/icon.png")
+        .map_err(|e| format!("Failed to load icon 'res/icon.png': {}", e))?;
+    window.set_icon(&icon_surface);
 
     // adjust the window based on args
     if args.x != 0 && args.y != 0 {

@@ -98,9 +98,13 @@ pub fn check(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
             }
         }
         if none_clicked && !down {
-            // clicking anywhere in the window is the 
-            // same as clicking the play button
-            click_play(app)
+            // clicking anywhere in the window is the same as clicking
+            // the play button (or refesh if time has expired)
+            if app.state == State::Done {
+                click_refresh(app);
+            } else {
+                click_play(app)
+            }
         }
     }
 }

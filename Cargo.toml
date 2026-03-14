@@ -1,7 +1,10 @@
 [package]
-name = "countdown"
+name = "Countdown"
 version = "0.1.0"
 edition = "2024"
+
+[build-dependencies]
+winres = "0.1"
 
 [dependencies]
 clap = {version = "4.5.47",features = ["derive"]}

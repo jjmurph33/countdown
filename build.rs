@@ -16,6 +16,13 @@ fn main() {
     if env::var("CARGO_CFG_WINDOWS").is_ok() {
         // copy the DLLs if we're on Windows
         copy_dlls(&manifest_dir, target_dir);
+
+        // set the icon for the exe
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("res/icon.ico");
+        if let Err(e) = res.compile() {
+            eprintln!("Failed to compile resources: {}", e);
+        }
     }
 
     // copy the resource folder
