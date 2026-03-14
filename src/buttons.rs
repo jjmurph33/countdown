@@ -163,7 +163,7 @@ pub fn draw(
 
             let mut dst_rect = b.rect;
 
-            // offset the image if the button is pressed
+            // offset the image when the button is pressed
             if b.pressed {
                 dst_rect.x += 1;
                 dst_rect.y += 1;

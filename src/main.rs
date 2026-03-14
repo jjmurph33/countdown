@@ -22,6 +22,7 @@ use std::time::Duration;
 
 const WINDOW_WIDTH: i32 = 185;
 const WINDOW_HEIGHT: i32 = 70;
+const TIMER_MAX: i32 =  5_999_000; // 99 minutes and 59 seconds
 
 #[derive(Parser)]
 struct Args {
@@ -30,9 +31,9 @@ struct Args {
     #[arg(short, default_value_t = 0)]
     y: i32, // window Y position
     #[arg(short = 'b')]
-    hide_borders: bool, // hide window borders / decorations
-    #[arg(default_value_t = 15,value_parser = clap::value_parser!(i32).range(1..=100))]
-    minutes: i32, // timer start value (between 1 and 100, defaults to 15)
+    hide_borders: bool, // hide window borders and decorations
+    #[arg(default_value_t = 15,value_parser = clap::value_parser!(i32).range(1..100))]
+    minutes: i32, // timer start value (between 1 and 99, defaults to 15)
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -68,7 +69,7 @@ pub fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let timer_ms = args.minutes * 60 * 1000;
-    
+
     // SDL initialization
     let sdl_context = sdl2::init().map_err(|e| format!("Failed to initialize SDL2: {}", e))?;
     let video_subsystem = sdl_context
@@ -95,7 +96,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         .build()
         .map_err(|e| format!("Failed to create window: {}", e))?;
 
-    // set window icon
+    // set the window icon
     let icon_surface = Surface::from_file("res/icon.png")
         .map_err(|e| format!("Failed to load icon 'res/icon.png': {}", e))?;
     window.set_icon(&icon_surface);
@@ -216,6 +217,27 @@ fn handle_events(
                     }
                 }
             }
+            Event::MouseWheel {
+                y, ..
+            } => {
+                match app.state {
+                    State::Running | State::Paused => {
+                        // increase or decrease the timer by 1 minute
+                        if y > 0 {
+                            app.timer_current += 60000;
+                            if app.timer_current > TIMER_MAX {
+                                app.timer_current = TIMER_MAX;
+                            }
+                        } else {
+                            app.timer_current -= 60000;
+                            if app.timer_current < 0 {
+                                app.timer_current = 0;
+                            }
+                        }
+                    },
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
@@ -236,7 +258,6 @@ fn draw(
     textures: &HashMap<&str, Texture>,
     font: &Font,
 ) -> Result<(), Box<dyn Error>> {
-
     let bg_color = match app.state {
         // red when done
         State::Done => Color::RGB(255, 100, 100),
@@ -304,7 +325,7 @@ fn draw_prompt(
     button_texture: &Texture,
 ) -> Result<(), Box<dyn Error>> {
     let message = match app.state {
-        State::Prompt(PromptType::Reset) => "Reset Timer?",
+        State::Prompt(PromptType::Reset) => " Reset?",
         State::Prompt(PromptType::Exit) =>  "  Exit?",
         _ => "",
     };
@@ -313,7 +334,7 @@ fn draw_prompt(
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
             let mut dst_rect = b.rect;
-            // offset the image if the button is pressed
+            // offset the image when the button is pressed
             if b.pressed {
                 dst_rect.x += 1;
                 dst_rect.y += 1;
