@@ -67,7 +67,7 @@ pub fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let timer_ms = args.minutes * 60 * 1000;
-
+    
     // SDL initialization
     let sdl_context = sdl2::init().map_err(|e| format!("Failed to initialize SDL2: {}", e))?;
     let video_subsystem = sdl_context
@@ -89,6 +89,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     // create the window
     let mut window = video_subsystem
         .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
+        .hidden()
         .position_centered()
         .build()
         .map_err(|e| format!("Failed to create window: {}", e))?;
@@ -100,6 +101,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if args.hide_borders {
         window.set_bordered(false);
     }
+    window.show();
 
     // create the canvas
     let mut canvas = window
@@ -126,7 +128,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         state: State::Running,
         timer_current: timer_ms,
         timer_max: timer_ms,
-        window_borders: true,
+        window_borders: !args.hide_borders,
         muted: false,
     };
 
@@ -228,11 +230,14 @@ fn draw(
     textures: &HashMap<&str, Texture>,
     font: &Font,
 ) -> Result<(), Box<dyn Error>> {
-    // clear the screen
-    let bg_color = if app.state == State::Done {
-        Color::RGB(255, 100, 100) // Red when done
-    } else {
-        Color::RGB(200, 200, 255)
+
+    let bg_color = match app.state {
+        // red when done
+        State::Done => Color::RGB(255, 100, 100),
+        // gray when paused
+        State::Paused => Color::RGB(150,150,150),
+        // blue when running
+        _ => Color::RGB(200, 200, 255)
     };
     canvas.set_draw_color(bg_color);
     canvas.clear();
@@ -261,20 +266,7 @@ fn timer_to_string(timer: i32) -> String {
     let secs = timer / 1000;
     let mins = secs / 60;
     let secs = secs % 60;
-
-    let mut mins = mins.to_string();
-    if mins.len() == 1 {
-        mins.insert(0, '0');
-    }
-    let mut secs = secs.to_string();
-    if secs.len() == 1 {
-        secs.insert(0, '0');
-    }
-    let mut timer_str = String::new();
-    timer_str.push_str(&mins);
-    timer_str.push_str(":");
-    timer_str.push_str(&secs);
-    timer_str
+    format!("{:02}:{:02}", mins, secs)
 }
 
 fn draw_char(
@@ -307,7 +299,7 @@ fn draw_prompt(
 ) -> Result<(), Box<dyn Error>> {
     let message = match app.state {
         State::Prompt(PromptType::Reset) => "Reset Timer?",
-        State::Prompt(PromptType::Exit) => "Exit?",
+        State::Prompt(PromptType::Exit) =>  "  Exit?",
         _ => "",
     };
     draw_text(message, WINDOW_WIDTH / 4, 10, canvas, font)?;

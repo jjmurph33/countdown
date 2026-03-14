@@ -76,9 +76,11 @@ pub fn check(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
     let p = Point::new(x, y);
     let mut buttons = BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_mut() {
+        let mut none_clicked = true;
         for b in buttons.iter_mut() {
             b.pressed = false;
             if b.rect.contains_point(p) {
+                none_clicked = false;
                 if down {
                     b.pressed = true;
                 } else {
@@ -94,6 +96,11 @@ pub fn check(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
                     return;
                 }
             }
+        }
+        if none_clicked && !down {
+            // clicking anywhere in the window is the 
+            // same as clicking the play button
+            click_play(app)
         }
     }
 }
