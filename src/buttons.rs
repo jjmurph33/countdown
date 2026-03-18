@@ -3,7 +3,7 @@ use sdl2::render::Texture;
 use sdl2::video::Window;
 use std::sync::Mutex;
 
-use crate::{App,State,PromptType};
+use crate::{App, PromptType, State};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ButtonType {
@@ -76,9 +76,11 @@ pub fn check(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
     let p = Point::new(x, y);
     let mut buttons = BUTTONS.lock().unwrap();
     if let Some(buttons) = buttons.as_mut() {
+        let mut none_clicked = true;
         for b in buttons.iter_mut() {
             b.pressed = false;
             if b.rect.contains_point(p) {
+                none_clicked = false;
                 if down {
                     b.pressed = true;
                 } else {
@@ -93,6 +95,15 @@ pub fn check(x: i32, y: i32, app: &mut App, window: &mut Window, down: bool) {
                     }
                     return;
                 }
+            }
+        }
+        if none_clicked && !down {
+            // clicking anywhere in the window is the same as clicking
+            // the play button (or refesh if time has expired)
+            if app.state == State::Done {
+                click_refresh(app);
+            } else {
+                click_play(app)
             }
         }
     }
@@ -152,7 +163,7 @@ pub fn draw(
 
             let mut dst_rect = b.rect;
 
-            // offset the image if the button is pressed
+            // offset the image when the button is pressed
             if b.pressed {
                 dst_rect.x += 1;
                 dst_rect.y += 1;
@@ -189,6 +200,8 @@ fn click_hide(app: &mut App, window: &mut Window) {
 
 fn click_mute(app: &mut App) {
     app.muted = !app.muted;
+    //TODO: mute the audio
+    //TODO: add sounds
     println!("Mute clicked");
 }
 

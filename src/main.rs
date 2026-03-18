@@ -7,11 +7,12 @@ extern crate sdl2;
 
 use clap::Parser;
 use sdl2::event::Event;
-use sdl2::image::LoadTexture;
+use sdl2::image::{LoadSurface, LoadTexture};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureQuery, WindowCanvas};
+use sdl2::surface::Surface;
 use sdl2::ttf::Font;
 use sdl2::video::WindowPos;
 use sdl2::{EventPump, mouse};
@@ -21,6 +22,7 @@ use std::time::Duration;
 
 const WINDOW_WIDTH: i32 = 185;
 const WINDOW_HEIGHT: i32 = 70;
+const TIMER_MAX: i32 = 5_999_000; // 99 minutes and 59 seconds
 
 #[derive(Parser)]
 struct Args {
@@ -29,9 +31,9 @@ struct Args {
     #[arg(short, default_value_t = 0)]
     y: i32, // window Y position
     #[arg(short = 'b')]
-    hide_borders: bool, // hide window borders / decorations
-    #[arg(default_value_t = 15,value_parser = clap::value_parser!(i32).range(1..=100))]
-    minutes: i32, // timer start value (between 1 and 100, defaults to 15)
+    hide_borders: bool, // hide window borders and decorations
+    #[arg(default_value_t = 15,value_parser = clap::value_parser!(i32).range(1..100))]
+    minutes: i32, // timer start value (between 1 and 99, defaults to 15)
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -88,10 +90,16 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // create the window
     let mut window = video_subsystem
-        .window("countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
+        .window("Countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
+        .hidden()
         .position_centered()
         .build()
         .map_err(|e| format!("Failed to create window: {}", e))?;
+
+    // set the window icon
+    let icon_surface = Surface::from_file("res/icon.png")
+        .map_err(|e| format!("Failed to load icon 'res/icon.png': {}", e))?;
+    window.set_icon(&icon_surface);
 
     // adjust the window based on args
     if args.x != 0 && args.y != 0 {
@@ -100,6 +108,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if args.hide_borders {
         window.set_bordered(false);
     }
+    window.show();
 
     // create the canvas
     let mut canvas = window
@@ -110,7 +119,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // load the textures
     let mut textures = HashMap::new();
-    let texture = texture_creator.load_texture("res/chars.png")
+    let texture = texture_creator
+        .load_texture("res/chars.png")
         .map_err(|e| format!("Failed to load texture 'res/chars.png': {}", e))?;
     textures.insert("chars", texture);
     let texture = texture_creator
@@ -125,7 +135,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         state: State::Running,
         timer_current: timer_ms,
         timer_max: timer_ms,
-        window_borders: true,
+        window_borders: !args.hide_borders,
         muted: false,
     };
 
@@ -207,6 +217,25 @@ fn handle_events(
                     }
                 }
             }
+            Event::MouseWheel { y, .. } => {
+                match app.state {
+                    State::Running | State::Paused => {
+                        // increase or decrease the timer by 1 minute
+                        if y > 0 {
+                            app.timer_current += 60000;
+                            if app.timer_current > TIMER_MAX {
+                                app.timer_current = TIMER_MAX;
+                            }
+                        } else {
+                            app.timer_current -= 60000;
+                            if app.timer_current < 0 {
+                                app.timer_current = 0;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
@@ -227,11 +256,13 @@ fn draw(
     textures: &HashMap<&str, Texture>,
     font: &Font,
 ) -> Result<(), Box<dyn Error>> {
-    // clear the screen
-    let bg_color = if app.state == State::Done {
-        Color::RGB(255, 100, 100) // Red when done
-    } else {
-        Color::RGB(200, 200, 255)
+    let bg_color = match app.state {
+        // red when done
+        State::Done => Color::RGB(255, 100, 100),
+        // gray when paused
+        State::Paused => Color::RGB(150, 150, 150),
+        // blue when running
+        _ => Color::RGB(200, 200, 255),
     };
     canvas.set_draw_color(bg_color);
     canvas.clear();
@@ -260,20 +291,7 @@ fn timer_to_string(timer: i32) -> String {
     let secs = timer / 1000;
     let mins = secs / 60;
     let secs = secs % 60;
-
-    let mut mins = mins.to_string();
-    if mins.len() == 1 {
-        mins.insert(0, '0');
-    }
-    let mut secs = secs.to_string();
-    if secs.len() == 1 {
-        secs.insert(0, '0');
-    }
-    let mut timer_str = String::new();
-    timer_str.push_str(&mins);
-    timer_str.push_str(":");
-    timer_str.push_str(&secs);
-    timer_str
+    format!("{:02}:{:02}", mins, secs)
 }
 
 fn draw_char(
@@ -305,8 +323,8 @@ fn draw_prompt(
     button_texture: &Texture,
 ) -> Result<(), Box<dyn Error>> {
     let message = match app.state {
-        State::Prompt(PromptType::Reset) => "Reset Timer?",
-        State::Prompt(PromptType::Exit) => "Exit?",
+        State::Prompt(PromptType::Reset) => " Reset?",
+        State::Prompt(PromptType::Exit) => "  Exit?",
         _ => "",
     };
     draw_text(message, WINDOW_WIDTH / 4, 10, canvas, font)?;
@@ -314,7 +332,7 @@ fn draw_prompt(
     if let Some(buttons) = buttons.as_ref() {
         for b in buttons.iter() {
             let mut dst_rect = b.rect;
-            // offset the image if the button is pressed
+            // offset the image when the button is pressed
             if b.pressed {
                 dst_rect.x += 1;
                 dst_rect.y += 1;
