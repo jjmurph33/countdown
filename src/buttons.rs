@@ -63,7 +63,7 @@ pub fn init(window_width: i32, window_height: i32) {
     x -= 24;
     let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
     *BUTTONS.lock().unwrap() = Some([exit, mute, hide, refresh, play]);
-
+    
     x = window_width / 4;
     y = window_height / 2;
     let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
@@ -160,15 +160,12 @@ pub fn draw(
                 }
                 _ => {}
             }
-
             let mut dst_rect = b.rect;
-
             // offset the image when the button is pressed
             if b.pressed {
                 dst_rect.x += 1;
                 dst_rect.y += 1;
             }
-
             canvas
                 .copy(&button_texture, src_rect, dst_rect)
                 .map_err(|e| format!("Failed to copy button texture: {}", e))?;
@@ -200,9 +197,6 @@ fn click_hide(app: &mut App, window: &mut Window) {
 
 fn click_mute(app: &mut App) {
     app.muted = !app.muted;
-    //TODO: mute the audio
-    //TODO: add sounds
-    println!("Mute clicked");
 }
 
 fn click_exit(app: &mut App) {

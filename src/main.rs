@@ -3,9 +3,8 @@
 
 mod buttons;
 
-extern crate sdl2;
-
 use clap::Parser;
+use sdl2::audio::{AudioQueue, AudioSpecDesired, AudioSpecWAV};
 use sdl2::event::Event;
 use sdl2::image::{LoadSurface, LoadTexture};
 use sdl2::keyboard::Keycode;
@@ -57,6 +56,8 @@ pub struct App {
     pub timer_max: i32,     // start value of timer
     pub window_borders: bool,
     pub muted: bool,
+    audio: AudioQueue<u8>,
+    sound_done: Vec<u8>,
 }
 
 pub fn main() {
@@ -75,6 +76,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     let video_subsystem = sdl_context
         .video()
         .map_err(|e| format!("Failed to initialize video subsystem: {}", e))?;
+    let audio_subsystem = sdl_context
+        .audio()
+        .map_err(|e| format!("Failed to initialize audio subsystem: {}", e))?;
     let timer_subsystem = sdl_context
         .timer()
         .map_err(|e| format!("Failed to initialize timer subsystem: {}", e))?;
@@ -98,7 +102,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // set the window icon
     let icon_surface = Surface::from_file("res/icon.png")
-        .map_err(|e| format!("Failed to load icon 'res/icon.png': {}", e))?;
+        .map_err(|e| format!("Failed to load icon: {}", e))?;
     window.set_icon(&icon_surface);
 
     // adjust the window based on args
@@ -121,12 +125,27 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut textures = HashMap::new();
     let texture = texture_creator
         .load_texture("res/chars.png")
-        .map_err(|e| format!("Failed to load texture 'res/chars.png': {}", e))?;
+        .map_err(|e| format!("Failed to load texture: {}", e))?;
     textures.insert("chars", texture);
     let texture = texture_creator
         .load_texture("res/buttons.png")
-        .map_err(|e| format!("Failed to load texture 'res/buttons.png': {}", e))?;
+        .map_err(|e| format!("Failed to load texture: {}", e))?;
     textures.insert("buttons", texture);
+
+    // load the sound effects
+    let wav = AudioSpecWAV::load_wav("res/done.wav")
+        .map_err(|e| format!("Failed to load sound file: {}", e))?;
+    let audio_queue = audio_subsystem
+        .open_queue(
+            None,
+            &AudioSpecDesired {
+                freq: Some(wav.freq),
+                channels: Some(wav.channels),
+                samples: None,
+            },
+        )
+        .map_err(|e| format!("Failed to load audio data: {}", e))?;
+    let sound_done = wav.buffer();
 
     // create the buttons
     buttons::init(WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -137,6 +156,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         timer_max: timer_ms,
         window_borders: !args.hide_borders,
         muted: false,
+        audio: audio_queue,
+        sound_done: sound_done.to_vec(),
     };
 
     let mut ticks = 0;
@@ -222,12 +243,12 @@ fn handle_events(
                     State::Running | State::Paused => {
                         // increase or decrease the timer by 1 minute
                         if y > 0 {
-                            app.timer_current += 60000;
+                            app.timer_current += 60_000;
                             if app.timer_current > TIMER_MAX {
                                 app.timer_current = TIMER_MAX;
                             }
                         } else {
-                            app.timer_current -= 60000;
+                            app.timer_current -= 60_000;
                             if app.timer_current < 0 {
                                 app.timer_current = 0;
                             }
@@ -247,6 +268,11 @@ fn update(elapsed_time: u64, app: &mut App) {
     if app.timer_current <= 0 {
         app.timer_current = 0;
         app.state = State::Done;
+        if !app.muted {
+            if app.audio.queue_audio(&app.sound_done).is_ok() {
+                app.audio.resume();
+            }
+        }
     }
 }
 
