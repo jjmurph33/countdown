@@ -19,9 +19,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
-const WINDOW_WIDTH: i32 = 185;
-const WINDOW_HEIGHT: i32 = 70;
-const TIMER_MAX: i32 = 5_999_000; // 99 minutes and 59 seconds
+const WINDOW_WIDTH: u32 = 185;
+const WINDOW_HEIGHT: u32 = 70;
+const TIMER_MAX: u64 = 5_999_000; // 99 minutes and 59 seconds
 
 #[derive(Parser)]
 struct Args {
@@ -31,8 +31,8 @@ struct Args {
     y: i32, // window Y position
     #[arg(short = 'b')]
     hide_borders: bool, // hide window borders and decorations
-    #[arg(default_value_t = 15,value_parser = clap::value_parser!(i32).range(1..100))]
-    minutes: i32, // timer start value (between 1 and 99, defaults to 15)
+    #[arg(default_value_t = 15,value_parser = clap::value_parser!(u32).range(1..100))]
+    minutes: u32, // timer start value (between 1 and 99, defaults to 15)
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -52,8 +52,8 @@ pub enum State {
 
 pub struct App {
     pub state: State,
-    pub timer_current: i32, // countdown time in milliseconds
-    pub timer_max: i32,     // start value of timer
+    pub timer_current: u64, // countdown time in milliseconds
+    pub timer_max: u64,     // start value of timer
     pub window_borders: bool,
     pub muted: bool,
     audio: AudioQueue<u8>,
@@ -152,8 +152,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let mut app = App {
         state: State::Running,
-        timer_current: timer_ms,
-        timer_max: timer_ms,
+        timer_current: timer_ms as u64,
+        timer_max: timer_ms as u64,
         window_borders: !args.hide_borders,
         muted: false,
         audio: audio_queue,
@@ -248,10 +248,7 @@ fn handle_events(
                                 app.timer_current = TIMER_MAX;
                             }
                         } else {
-                            app.timer_current -= 60_000;
-                            if app.timer_current < 0 {
-                                app.timer_current = 0;
-                            }
+                            app.timer_current = app.timer_current.saturating_sub(60_000);
                         }
                     }
                     _ => {}
@@ -264,9 +261,8 @@ fn handle_events(
 }
 
 fn update(elapsed_time: u64, app: &mut App) {
-    app.timer_current -= elapsed_time as i32;
-    if app.timer_current <= 0 {
-        app.timer_current = 0;
+    app.timer_current = app.timer_current.saturating_sub(elapsed_time);
+    if app.timer_current == 0 {
         app.state = State::Done;
         if !app.muted {
             if app.audio.queue_audio(&app.sound_done).is_ok() {
@@ -313,7 +309,7 @@ fn draw(
     Ok(())
 }
 
-fn timer_to_string(timer: i32) -> String {
+fn timer_to_string(timer: u64) -> String {
     let secs = timer / 1000;
     let mins = secs / 60;
     let secs = secs % 60;
@@ -322,13 +318,13 @@ fn timer_to_string(timer: i32) -> String {
 
 fn draw_char(
     c: char,
-    x: i32,
-    y: i32,
+    x: u32,
+    y: u32,
     canvas: &mut WindowCanvas,
     char_texture: &Texture,
 ) -> Result<(), Box<dyn Error>> {
     let src_rect = char_rect(c);
-    let dst_rect = Rect::new(x, y, 32, 32);
+    let dst_rect = Rect::new(x as i32, y as i32, 32, 32);
     canvas
         .copy(&char_texture, src_rect, dst_rect)
         .map_err(|e| format!("Failed to copy char texture: {}", e).into())
@@ -373,8 +369,8 @@ fn draw_prompt(
 
 fn draw_text(
     text: &str,
-    x: i32,
-    y: i32,
+    x: u32,
+    y: u32,
     canvas: &mut WindowCanvas,
     font: &Font,
 ) -> Result<Rect, Box<dyn Error>> {
@@ -390,7 +386,7 @@ fn draw_text(
         .map_err(|e| format!("Failed to create texture from surface: {}", e))?;
     // get the size of the texture
     let TextureQuery { width, height, .. } = texture.query();
-    let target_rect = Rect::new(x, y, width, height);
+    let target_rect = Rect::new(x as i32, y as i32, width, height);
     // copy the texture to the canvas
     canvas
         .copy(&texture, None, target_rect)

@@ -50,9 +50,11 @@ impl Button {
 pub static BUTTONS: Mutex<Option<[Button; 5]>> = Mutex::new(None);
 pub static PROMPT_BUTTONS: Mutex<Option<[Button; 2]>> = Mutex::new(None);
 
-pub fn init(window_width: i32, window_height: i32) {
-    let mut x = window_width - 24;
-    let mut y = window_height - 24;
+pub fn init(window_width: u32, window_height: u32) {
+    let width = window_width as i32;
+    let height = window_height as i32;
+    let mut x = width - 24;
+    let mut y = height - 24;
     let exit = Button::new(ButtonType::Exit, x, y, 6, 1, 6, 1);
     x -= 24;
     let mute = Button::new(ButtonType::Mute, x, y, 4, 1, 3, 1);
@@ -64,8 +66,8 @@ pub fn init(window_width: i32, window_height: i32) {
     let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
     *BUTTONS.lock().unwrap() = Some([exit, mute, hide, refresh, play]);
     
-    x = window_width / 4;
-    y = window_height / 2;
+    x = width / 4;
+    y = height / 2;
     let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
     x = x + 64;
     let cancel = Button::new(ButtonType::Cancel, x, y, 6, 1, 6, 1);
