@@ -48,7 +48,7 @@ cargo build --release
 ## Run
 
 ```sh
-cargo run -- 15
+target/release/Countdown 10
 ```
 
 The argument is the starting time in minutes between 1 and 99. Defaults to 15 minutes.
@@ -56,10 +56,10 @@ The argument is the starting time in minutes between 1 and 99. Defaults to 15 mi
 Other options:
 
 ```sh
-cargo run -- -x 100 -y 100 25
-cargo run -- -b 10
+target/release/Countdown -x 100 -y 100 -b 5
 ```
 
 - `-x <pixels>`: window X positio
 - `-y <pixels>`: window Y position
 - `-b`: hide window borders
+- `5`: 5 minutes
