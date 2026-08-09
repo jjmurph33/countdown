@@ -101,8 +101,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         .map_err(|e| format!("Failed to create window: {}", e))?;
 
     // set the window icon
-    let icon_surface = Surface::from_file("res/icon.png")
-        .map_err(|e| format!("Failed to load icon: {}", e))?;
+    let icon_surface =
+        Surface::from_file("res/icon.png").map_err(|e| format!("Failed to load icon: {}", e))?;
     window.set_icon(&icon_surface);
 
     // adjust the window based on args

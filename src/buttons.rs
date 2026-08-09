@@ -65,7 +65,7 @@ pub fn init(window_width: u32, window_height: u32) {
     x -= 24;
     let play = Button::new(ButtonType::Play, x, y, 1, 0, 0, 0);
     *BUTTONS.lock().unwrap() = Some([exit, mute, hide, refresh, play]);
-    
+
     x = width / 4;
     y = height / 2;
     let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
