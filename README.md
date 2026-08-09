@@ -6,7 +6,8 @@ A desktop countdown timer built with Rust and SDL.
 <div align="center">
 
 ![countdown](data/images/countdown.png) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
-![countdown-desktop](data/images/countdown-desktop.png) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ![countdown-done](data/images/countdown-done.png)
+![countdown-done](data/images/countdown-done.png) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+![countdown-desktop](data/images/countdown-desktop.png)
 
 </div>
 
@@ -59,7 +60,7 @@ Other options:
 target/release/Countdown -x 100 -y 100 -b 5
 ```
 
-- `-x <pixels>`: window X positio
+- `-x <pixels>`: window X position
 - `-y <pixels>`: window Y position
 - `-b`: hide window borders
 - `5`: 5 minutes
