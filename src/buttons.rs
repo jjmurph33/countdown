@@ -69,7 +69,7 @@ pub fn init(window_width: u32, window_height: u32) {
     x = width / 4;
     y = height / 2;
     let ok = Button::new(ButtonType::Ok, x, y, 5, 1, 5, 1);
-    x = x + 64;
+    x += 64;
     let cancel = Button::new(ButtonType::Cancel, x, y, 6, 1, 6, 1);
     *PROMPT_BUTTONS.lock().unwrap() = Some([ok, cancel]);
 }
@@ -169,7 +169,7 @@ pub fn draw(
                 dst_rect.y += 1;
             }
             canvas
-                .copy(&button_texture, src_rect, dst_rect)
+                .copy(button_texture, src_rect, dst_rect)
                 .map_err(|e| format!("Failed to copy button texture: {}", e))?;
         }
     }
@@ -206,27 +206,20 @@ fn click_exit(app: &mut App) {
 }
 
 pub fn click_ok(app: &mut App) {
-    match app.state {
-        State::Prompt(prompt_type) => {
-            if prompt_type == PromptType::Reset {
-                // reset the timer
-                app.timer_current = app.timer_max;
-                app.state = State::Paused;
-            } else if prompt_type == PromptType::Exit {
-                // exit the app
-                app.state = State::Exiting;
-            }
+    if let State::Prompt(prompt_type) = app.state {
+        if prompt_type == PromptType::Reset {
+            // reset the timer
+            app.timer_current = app.timer_max;
+            app.state = State::Paused;
+        } else if prompt_type == PromptType::Exit {
+            // exit the app
+            app.state = State::Exiting;
         }
-        _ => {}
     }
 }
 
 pub fn click_cancel(app: &mut App) {
-    match app.state {
-        State::Prompt(_) => {
-            // cancel the prompt
-            app.state = State::Paused;
-        }
-        _ => {}
+    if let State::Prompt(_) = app.state {
+        app.state = State::Paused;
     }
 }

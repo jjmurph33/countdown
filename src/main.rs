@@ -94,7 +94,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // create the window
     let mut window = video_subsystem
-        .window("Countdown", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
+        .window("Countdown", WINDOW_WIDTH, WINDOW_HEIGHT)
         .hidden()
         .position_centered()
         .build()
@@ -181,7 +181,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             update(elapsed_time, &mut app);
         }
 
-        draw(&mut app, &mut canvas, &textures, &font)?;
+        draw(&app, &mut canvas, &textures, &font)?;
 
         std::thread::sleep(Duration::from_millis(16));
     }
@@ -264,10 +264,8 @@ fn update(elapsed_time: u64, app: &mut App) {
     app.timer_current = app.timer_current.saturating_sub(elapsed_time);
     if app.timer_current == 0 {
         app.state = State::Done;
-        if !app.muted {
-            if app.audio.queue_audio(&app.sound_done).is_ok() {
-                app.audio.resume();
-            }
+        if !app.muted && app.audio.queue_audio(&app.sound_done).is_ok() {
+            app.audio.resume();
         }
     }
 }
@@ -290,7 +288,7 @@ fn draw(
     canvas.clear();
 
     match app.state {
-        State::Prompt(_) => draw_prompt(app, canvas, font, &textures.get("buttons").unwrap())?,
+        State::Prompt(_) => draw_prompt(app, canvas, font, textures.get("buttons").unwrap())?,
         _ => {
             // draw the timer
             let offset = 8;
@@ -302,7 +300,7 @@ fn draw(
                 draw_char(c, x, y, canvas, texture)?;
                 x += 32;
             }
-            buttons::draw(app, canvas, &textures.get("buttons").unwrap())?;
+            buttons::draw(app, canvas, textures.get("buttons").unwrap())?;
         }
     }
     canvas.present();
@@ -326,7 +324,7 @@ fn draw_char(
     let src_rect = char_rect(c);
     let dst_rect = Rect::new(x as i32, y as i32, 32, 32);
     canvas
-        .copy(&char_texture, src_rect, dst_rect)
+        .copy(char_texture, src_rect, dst_rect)
         .map_err(|e| format!("Failed to copy char texture: {}", e).into())
 }
 
@@ -360,7 +358,7 @@ fn draw_prompt(
                 dst_rect.y += 1;
             }
             canvas
-                .copy(&button_texture, b.texture_rect, dst_rect)
+                .copy(button_texture, b.texture_rect, dst_rect)
                 .map_err(|e| format!("Failed to copy button texture: {}", e))?;
         }
     }
