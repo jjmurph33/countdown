@@ -5,9 +5,10 @@ A desktop countdown timer built with Rust and SDL.
 
 <div align="center">
 
-![countdown](data/images/countdown.png) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
-![countdown-done](data/images/countdown-done.png) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
-![countdown-desktop](data/images/countdown-desktop.png)
+![countdown-desktop](data/images/countdown-desktop.png)  
+<br>
+![countdown](data/images/countdown.png) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+![countdown-done](data/images/countdown-done.png) 
 
 </div>
 
@@ -41,6 +42,7 @@ brew install sdl2 sdl2_image sdl2_ttf
     `SDL2_ttf-devel-2.x.x-VC.zip`  
 2. Copy the lib and DLL files to the project directory
 
+<hr>
 <br>
 
 ## Build
@@ -49,6 +51,7 @@ brew install sdl2 sdl2_image sdl2_ttf
 cargo build --release
 ```
 
+<hr>
 <br>
 
 ## Run
