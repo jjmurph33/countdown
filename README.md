@@ -43,7 +43,6 @@ brew install sdl2 sdl2_image sdl2_ttf
 2. Copy the lib and DLL files to the project directory
 
 <hr>
-<br>
 
 ## Build
 
@@ -52,7 +51,6 @@ cargo build --release
 ```
 
 <hr>
-<br>
 
 ## Run
 

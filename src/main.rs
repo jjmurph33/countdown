@@ -5,7 +5,7 @@ mod buttons;
 
 use clap::Parser;
 use sdl2::audio::{AudioQueue, AudioSpecDesired, AudioSpecWAV};
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 use sdl2::image::{LoadSurface, LoadTexture};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -13,7 +13,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureQuery, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font;
-use sdl2::video::WindowPos;
+use sdl2::video::{Window,WindowPos};
 use sdl2::{EventPump, mouse};
 use std::collections::HashMap;
 use std::error::Error;
@@ -56,6 +56,8 @@ pub struct App {
     pub timer_max: u64,     // start value of timer
     pub window_borders: bool,
     pub muted: bool,
+    pub position: (i32,i32),
+    pub dragging: bool,
     audio: AudioQueue<u8>,
     sound_done: Vec<u8>,
 }
@@ -115,7 +117,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     window.show();
 
     // create the canvas
-    let mut canvas = window
+    let mut canvas = Window::from_ref(window.context())
         .into_canvas()
         .build()
         .map_err(|e| format!("Failed to create canvas: {}", e))?;
@@ -156,6 +158,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         timer_max: timer_ms as u64,
         window_borders: !args.hide_borders,
         muted: false,
+        position: window.position(),
+        dragging: false,
         audio: audio_queue,
         sound_done: sound_done.to_vec(),
     };
@@ -167,7 +171,16 @@ fn run() -> Result<(), Box<dyn Error>> {
         .map_err(|e| format!("Failed to get event pump: {}", e))?;
 
     loop {
+        let dragging = app.dragging;
+
         handle_events(&mut event_pump, &mut app, &mut canvas)?;
+
+        if dragging != app.dragging {
+            if !app.dragging {
+                // finished dragging so move the window
+                window.set_position(WindowPos::Positioned(app.position.0), WindowPos::Positioned(app.position.1));
+            }
+        }
 
         if app.state == State::Exiting {
             break;
@@ -226,6 +239,8 @@ fn handle_events(
                         State::Prompt(_) => buttons::check_prompt(x, y, app, true),
                         _ => buttons::check(x, y, app, canvas.window_mut(), true),
                     }
+                } else if mouse_btn == mouse::MouseButton::Right {
+                    app.dragging = true;
                 }
             }
             Event::MouseButtonUp {
@@ -236,6 +251,8 @@ fn handle_events(
                         State::Prompt(_) => buttons::check_prompt(x, y, app, false),
                         _ => buttons::check(x, y, app, canvas.window_mut(), false),
                     }
+                } else if mouse_btn == mouse::MouseButton::Right {
+                    app.dragging = false;
                 }
             }
             Event::MouseWheel { y, .. } => {
@@ -251,6 +268,23 @@ fn handle_events(
                             app.timer_current = app.timer_current.saturating_sub(60_000);
                         }
                     }
+                    _ => {}
+                }
+            }
+            Event::MouseMotion { mousestate, xrel, yrel, .. } => {
+                if mousestate.right() {
+                    // update the window position for dragging
+                    app.position.0 += xrel;
+                    app.position.1 += yrel;
+                }
+            }
+            Event::Window { win_event, .. } => {
+                match win_event {
+                    WindowEvent::Moved(x,y) => {
+                        // save the position after moving window
+                        app.position.0 = x;
+                        app.position.1 = y;
+                    },
                     _ => {}
                 }
             }
