@@ -155,10 +155,8 @@ pub fn draw(
                         src_rect = b.texture_rect_alt;
                     }
                 }
-                ButtonType::Mute => {
-                    if !app.muted {
-                        src_rect = b.texture_rect_alt;
-                    }
+                ButtonType::Mute if !app.muted => {
+                    src_rect = b.texture_rect_alt;
                 }
                 _ => {}
             }

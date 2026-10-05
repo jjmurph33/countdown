@@ -13,7 +13,7 @@ use sdl2::rect::Rect;
 use sdl2::render::{Texture, TextureQuery, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font;
-use sdl2::video::{Window,WindowPos};
+use sdl2::video::{Window, WindowPos};
 use sdl2::{EventPump, mouse};
 use std::collections::HashMap;
 use std::error::Error;
@@ -56,7 +56,7 @@ pub struct App {
     pub timer_max: u64,     // start value of timer
     pub window_borders: bool,
     pub muted: bool,
-    pub position: (i32,i32),
+    pub position: (i32, i32),
     pub dragging: bool,
     audio: AudioQueue<u8>,
     sound_done: Vec<u8>,
@@ -175,11 +175,12 @@ fn run() -> Result<(), Box<dyn Error>> {
 
         handle_events(&mut event_pump, &mut app, &mut canvas)?;
 
-        if dragging != app.dragging {
-            if !app.dragging {
-                // finished dragging so move the window
-                window.set_position(WindowPos::Positioned(app.position.0), WindowPos::Positioned(app.position.1));
-            }
+        if dragging != app.dragging && !app.dragging {
+            // finished dragging so move the window
+            window.set_position(
+                WindowPos::Positioned(app.position.0),
+                WindowPos::Positioned(app.position.1),
+            );
         }
 
         if app.state == State::Exiting {
@@ -271,22 +272,25 @@ fn handle_events(
                     _ => {}
                 }
             }
-            Event::MouseMotion { mousestate, xrel, yrel, .. } => {
+            Event::MouseMotion {
+                mousestate,
+                xrel,
+                yrel,
+                ..
+            } => {
                 if mousestate.right() {
                     // update the window position for dragging
                     app.position.0 += xrel;
                     app.position.1 += yrel;
                 }
             }
-            Event::Window { win_event, .. } => {
-                match win_event {
-                    WindowEvent::Moved(x,y) => {
-                        // save the position after moving window
-                        app.position.0 = x;
-                        app.position.1 = y;
-                    },
-                    _ => {}
-                }
+            Event::Window {
+                win_event: WindowEvent::Moved(x, y),
+                ..
+            } => {
+                // save the position after moving window
+                app.position.0 = x;
+                app.position.1 = y;
             }
             _ => {}
         }
